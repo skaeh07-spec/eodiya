@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="어디야?">
+<meta name="theme-color" content="#18203A">
+<title>어디야? · 친구 시간표</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=Do+Hyeon&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF2F7; --panel:#FFFFFF; --ink:#18203A; --muted:#5A6480; --line:#D5DCE7;
+  --gold:#E8B123; --free:#1F9464; --busy:#C9423A; --soft:#F6F8FB;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121726; --panel:#1A2134; --ink:#E9EDF6; --muted:#9AA4BF; --line:#2C3550;
+    --gold:#F0C04A; --free:#3CC48C; --busy:#EF6B61; --soft:#161C2D;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121726; --panel:#1A2134; --ink:#E9EDF6; --muted:#9AA4BF; --line:#2C3550;
+  --gold:#F0C04A; --free:#3CC48C; --busy:#EF6B61; --soft:#161C2D;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  font-size:15px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:18px}
+.brand{font-family:"Do Hyeon","IBM Plex Sans KR",sans-serif;font-size:44px;line-height:1;letter-spacing:-.5px;margin:0}
+.brand small{display:block;font-family:"IBM Plex Sans KR",sans-serif;font-size:14px;color:var(--muted);margin-top:6px;letter-spacing:0}
+.clock{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 10px}
+.clock select,.clock input{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:6px 8px}
+.clock .live{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--soft)}
+.clock .live.on{background:var(--gold);border-color:var(--gold);color:#1B1B1B;font-weight:700}
+
+nav.tabs{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto}
+nav.tabs button{border:none;background:transparent;padding:9px 14px;border-radius:10px;color:var(--muted);font-weight:500;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+.hint{color:var(--muted);font-size:14px;margin:0 0 12px}
+
+/* now board */
+.board{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.dot{width:14px;height:14px;border-radius:50%}
+.who{font-weight:700;font-size:17px}
+.where{font-family:"Do Hyeon",sans-serif;font-size:26px;line-height:1.15}
+.sub{color:var(--muted);font-size:13.5px}
+.badge{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.badge.free{color:var(--free);background:color-mix(in srgb,var(--free) 14%,transparent)}
+.badge.busy{color:var(--busy);background:color-mix(in srgb,var(--busy) 14%,transparent)}
+
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:5px 12px 5px 8px;font-size:14px}
+.chip[aria-pressed="false"]{opacity:.45}
+.chip .dot{width:10px;height:10px}
+
+/* grid */
+.gridscroll{overflow-x:auto}
+.grid{display:grid;min-width:620px;position:relative}
+.gh{font-size:13px;font-weight:700;text-align:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.gh.today{color:var(--gold)}
+.tcol{position:relative}
+.tcol span{position:absolute;right:6px;font-size:11px;color:var(--muted);transform:translateY(-50%)}
+.dcol{position:relative;border-left:1px solid var(--line)}
+.hline{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.blk{position:absolute;border-radius:6px;padding:3px 5px;font-size:11px;line-height:1.25;overflow:hidden;color:#fff;border:1px solid rgba(0,0,0,.08)}
+.blk b{display:block;font-size:11.5px}
+.nowline{position:absolute;left:0;right:0;border-top:2px solid var(--gold);z-index:3}
+
+/* free */
+.day{padding:12px 0;border-bottom:1px solid var(--line)}
+.day:last-child{border-bottom:none}
+.day h3{margin:0 0 8px;font-size:16px}
+.slot{display:inline-block;margin:0 6px 6px 0;padding:6px 11px;border-radius:10px;background:color-mix(in srgb,var(--free) 13%,transparent);color:var(--free);font-weight:700;font-size:14px}
+.slot i{font-style:normal;font-weight:400;opacity:.8;margin-left:4px}
+.none{color:var(--muted);font-size:14px}
+
+/* manage */
+.friend{border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.fhead{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--soft)}
+.fhead input[type=text]{flex:1;min-width:0;border:1px solid transparent;background:transparent;font-weight:700;font-size:16px;padding:4px 6px;border-radius:8px}
+.fhead input[type=text]:hover,.fhead input[type=text]:focus{border-color:var(--line);background:var(--panel)}
+.fhead input[type=color]{width:30px;height:30px;border:none;padding:0;background:none}
+.fbody{padding:12px}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:10px;font-size:13.5px;resize:vertical}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 14px;font-weight:500}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--busy)}
+.btn.small{padding:4px 10px;font-size:13px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:500;font-size:12.5px}
+.tablewrap{overflow-x:auto}
+.manual{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr 1fr auto;gap:6px;margin-top:10px}
+.manual input{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:6px 8px;min-width:0}
+@media (max-width:640px){
+  .manual{grid-template-columns:1fr 1fr}
+  .brand{font-size:36px}
+  .where{font-size:22px}
+}
+label.btn.photo{display:inline-block;cursor:pointer}
+.msg{font-size:13.5px;margin:6px 0 0}
+.msg.ok{color:var(--free)} .msg.err{color:var(--busy)}
+.empty{text-align:center;padding:30px 10px}
+.empty p{color:var(--muted)}
+details.help summary{cursor:pointer;color:var(--muted);font-size:13.5px}
+details.help pre{white-space:pre-wrap;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12.5px;overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">어디야?<small>친구 시간표 올리고, 지금 어디 있는지 · 언제 비는지 보기</small></h1>
+    <div class="clock" aria-label="기준 시간">
+      <select id="daySel" aria-label="요일"></select>
+      <input id="timeSel" type="time" aria-label="시간">
+      <button id="liveBtn" class="live on" type="button">지금</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="now" aria-selected="true">지금 어디?</button>
+    <button role="tab" data-tab="grid" aria-selected="false">시간표</button>
+    <button role="tab" data-tab="free" aria-selected="false">같이 비는 시간</button>
+    <button role="tab" data-tab="manage" aria-selected="false">친구 관리</button>
+  </nav>
+
+  <main id="view"></main>
+</div>
+
+<script>
+const DAYS=['월','화','수','목','금','토','일'];
+const PALETTE=['#3D6FE0','#E0673D','#1F9464','#9A4FD0','#C99A12','#D0447F','#2A9DB0','#6B7A2E'];
+const START=8*60, END=22*60, MIN_FREE=30;
+
+let state={friends:[]};
+let tab='now', live=true, sel=null, openId=null;
+
+function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+function dur(m){const h=Math.floor(m/60),r=m%60;return (h?h+'시간':'')+(h&&r?' ':'')+(r?r+'분':'')}
+
+/* ---------- time reference ---------- */
+function nowRef(){const d=new Date();return{day:(d.getDay()+6)%7,min:d.getHours()*60+d.getMinutes()}}
+function ref(){
+  if(live) return nowRef();
+  const [h,m]=(document.getElementById('timeSel').value||'12:00').split(':').map(Number);
+  return{day:+document.getElementById('daySel').value,min:h*60+m};
+}
+function syncClock(){
+  if(!live) return;
+  const r=nowRef();
+  document.getElementById('daySel').value=r.day;
+  document.getElementById('timeSel').value=fmt(r.min);
+}
+
+/* ---------- parsing ---------- */
+const DAY_KO={'월':0,'화':1,'수':2,'목':3,'금':4,'토':5,'일':6};
+const DAY_EN={M:0,T:1,W:2,Th:3,R:3,F:4,Sa:5,Su:6};
+function parseDays(s){
+  const out=new Set();
+  if(/[월화수목금토일]/.test(s)){for(const ch of s) if(ch in DAY_KO) out.add(DAY_KO[ch])}
+  else (s.match(/Th|Sa|Su|M|T|W|F|R/g)||[]).forEach(t=>out.add(DAY_EN[t]));
+  return [...out].sort((a,b)=>a-b);
+}
+function parseTime(s){
+  const m=s.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/); if(!m) return null;
+  let h=+m[1],mi=+m[2]; const ap=m[3]&&m[3].toUpperCase();
+  if(ap==='PM'&&h<12)h+=12; if(ap==='AM'&&h===12)h=0;
+  if(!ap&&h<8)h+=12; // "1:30" 같은 건 오후로 봄
+  return h*60+mi;
+}
+const COMP=/\b(LEC|TUT|LAB|SEM|TST|PRJ|CLN|DIS|STU|WSP)\b/;
+function parseTimetable(text){
+  const out=[]; let course='';
+  const courseRe=/^\s*([A-Z]{2,6})\s?(\d{2,3}[A-Z]?)\b/;
+  const dtRe=/(?<![A-Za-z])((?:Th|Sa|Su|M|T|W|F|R)+|[월화수목금토일]+)[\s,|/]*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)\s*[-–~]\s*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)/;
+  for(const raw of text.split(/\r?\n/)){
+    const line=raw.trim(); if(!line) continue;
+    const cm=line.match(courseRe);
+    const isCourse=cm&&!COMP.test(cm[1]);
+    const dm=line.match(dtRe);
+    if(isCourse) course=cm[1]+' '+cm[2];
+    if(!dm) continue;
+    if(line.includes('|')){const first=line.split('|')[0].trim();if(first&&!dtRe.test(first))course=first.replace(/\s+(LEC|TUT|LAB)$/,'')}
+    const days=parseDays(dm[1]), st=parseTime(dm[2]), en=parseTime(dm[3]);
+    if(!days.length||st==null||en==null||en<=st) continue;
+    const after=line.slice(dm.index+dm[0].length);
+    const room=after.match(/^[\s|,]*([A-Z]{1,5}\d?\s?\d{3,4}[A-Z]?)\b/);
+    let loc=room?room[1]:((after.split(/\t|\||,|\s{2,}/).map(x=>x.trim()).filter(Boolean)[0])||'');
+    if(/^tba$/i.test(loc)) loc='';
+    const comp=(line.match(COMP)||[])[1]||'';
+    out.push({id:uid(),course:course||'수업',type:comp,days,start:st,end:en,loc});
+  }
+  return out;
+}
+
+/* ---------- status ---------- */
+function classesOn(f,day){return f.classes.filter(c=>c.days.includes(day)).sort((a,b)=>a.start-b.start)}
+function statusOf(f,r){
+  const today=classesOn(f,r.day);
+  const cur=today.find(c=>c.start<=r.min&&r.min<c.end);
+  const next=today.find(c=>c.start>=(cur?cur.end:r.min));
+  if(cur){
+    // chain back-to-back classes
+    let freeAt=cur.end;
+    for(const c of today){if(c.start<=freeAt+10&&c.end>freeAt&&c.start>=cur.start)freeAt=Math.max(freeAt,c.end)}
+    return{busy:true,cur,freeAt,next};
+  }
+  const later=today.filter(c=>c.start>r.min);
+  return{busy:false,next,freeUntil:later.length?later[0].start:null,done:!later.length&&today.length>0,noclass:today.length===0};
+}
+
+/* ---------- free slots ---------- */
+function freeSlots(friends,day){
+  const busy=friends.flatMap(f=>classesOn(f,day).map(c=>[c.start,c.end])).sort((a,b)=>a[0]-b[0]);
+  const slots=[];let t=START;
+  for(const [s,e] of busy){ if(s>t) slots.push([t,Math.min(s,END)]); t=Math.max(t,e); if(t>=END)break; }
+  if(t<END) slots.push([t,END]);
+  return slots.filter(([s,e])=>e-s>=MIN_FREE);
+}
+
+/* ---------- selection ---------- */
+function selected(){
+  if(!sel) sel=new Set(state.friends.map(f=>f.id));
+  return state.friends.filter(f=>sel.has(f.id));
+}
+function chipsHTML(){
+  if(!sel) sel=new Set(state.friends.map(f=>f.id));
+  return '<div class="chips">'+state.friends.map(f=>
+    `<button class="chip" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot" style="background:${f.color}"></span>${esc(f.name)}</button>`).join('')+'</div>';
+}
+
+/* ---------- views ---------- */
+function emptyHTML(){
+  return `<div class="panel empty"><p>아직 친구가 없어요. 친구를 추가하고 시간표를 붙여넣어 보세요.</p>
+  <div class="actions" style="justify-content:center"><button class="btn primary" data-act="goManage">친구 추가하기</button><button class="btn" data-act="demo">예시로 둘러보기</button></div></div>`;
+}
+function viewNow(){
+  if(!state.friends.length) return emptyHTML();
+  const r=ref();
+  const rows=state.friends.map(f=>{
+    const s=statusOf(f,r); let where,sub,badge;
+    if(s.busy){
+      where=esc(s.cur.loc||'강의실 미정');
+      sub=`${esc(s.cur.course)}${s.cur.type?' '+s.cur.type:''} · ${fmt(s.freeAt)}에 끝나요`;
+      badge=`<span class="badge busy">수업 중</span>`;
+    }else{
+      where=s.noclass?'오늘 수업 없음':s.done?'오늘 수업 끝':`${fmt(s.freeUntil)}까지 비어요`;
+      sub=s.next?`다음: ${esc(s.next.course)} · ${esc(s.next.loc||'강의실 미정')} · ${fmt(s.next.start)}`:'';
+      if(!s.noclass&&!s.done) sub=`${dur(s.freeUntil-r.min)} 남음`+(sub?' · '+sub:'');
+      badge=`<span class="badge free">비어있음</span>`;
+    }
+    return {s,html:`<div class="row"><span class="dot" style="background:${f.color}"></span>
+      <div><div class="who">${esc(f.name)}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
+  });
+  rows.sort((a,b)=>(a.s.busy-b.s.busy));
+  return `<div class="panel"><p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준${live?' · 자동으로 갱신돼요':''}</p><div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
+}
+function viewGrid(){
+  if(!state.friends.length) return emptyHTML();
+  const fs=selected(); const r=ref();
+  const all=state.friends.flatMap(f=>f.classes);
+  const days=[0,1,2,3,4].concat([5,6].filter(d=>all.some(c=>c.days.includes(d))));
+  let lo=START,hi=18*60;
+  all.forEach(c=>{lo=Math.min(lo,Math.floor(c.start/60)*60);hi=Math.max(hi,Math.ceil(c.end/60)*60)});
+  const PX=0.8, H=(hi-lo)*PX;
+  let h=`<div class="grid" style="grid-template-columns:44px repeat(${days.length},1fr)"><div></div>`;
+  days.forEach(d=>h+=`<div class="gh ${live&&d===r.day?'today':''}">${DAYS[d]}</div>`);
+  h+=`<div class="tcol" style="height:${H}px">`;
+  for(let t=lo;t<=hi;t+=60) h+=`<span style="top:${(t-lo)*PX}px">${t/60}</span>`;
+  h+='</div>';
+  days.forEach(d=>{
+    h+=`<div class="dcol" style="height:${H}px">`;
+    for(let t=lo+60;t<hi;t+=60) h+=`<div class="hline" style="top:${(t-lo)*PX}px"></div>`;
+    fs.forEach((f,i)=>{
+      const w=100/fs.length;
+      classesOn(f,d).forEach(c=>{
+        h+=`<div class="blk" title="${esc(f.name)} · ${esc(c.course)} ${fmt(c.start)}–${fmt(c.end)} ${esc(c.loc)}" style="top:${(c.start-lo)*PX}px;height:${(c.end-c.start)*PX-2}px;left:calc(${i*w}% + 2px);width:calc(${w}% - 4px);background:${f.color}">
+          <b>${esc(c.course)}</b>${esc(c.loc)}</div>`;
+      });
+    });
+    if(d===r.day&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
+    h+='</div>';
+  });
+  h+='</div>';
+  return `<div class="panel">${chipsHTML()}<div class="gridscroll">${h}</div></div>`;
+}
+function viewFree(){
+  if(!state.friends.length) return emptyHTML();
+  const fs=selected(); const r=ref();
+  const all=state.friends.flatMap(f=>f.classes);
+  const days=[0,1,2,3,4].concat([5,6].filter(d=>all.some(c=>c.days.includes(d))));
+  let h=`<div class="panel">${chipsHTML()}<p class="hint">선택한 친구들이 모두 수업 없는 시간이에요 (${fmt(START)}–${fmt(END)}, ${MIN_FREE}분 이상).</p>`;
+  if(!fs.length) return h+'<p class="none">위에서 친구를 한 명 이상 골라주세요.</p></div>';
+  days.forEach(d=>{
+    const slots=freeSlots(fs,d);
+    h+=`<div class="day"><h3>${DAYS[d]}요일${live&&d===r.day?' (오늘)':''}</h3>`+
+      (slots.length?slots.map(([s,e])=>`<span class="slot">${fmt(s)}–${fmt(e)}<i>${dur(e-s)}</i></span>`).join(''):'<span class="none">같이 비는 시간이 없어요</span>')+'</div>';
+  });
+  return h+'</div>';
+}
+function viewManage(){
+  let h=`<div class="actions"><button class="btn primary" data-act="add">친구 추가</button>${state.friends.length?'':'<button class="btn" data-act="demo">예시 넣기</button>'}</div>`;
+  state.friends.forEach(f=>{
+    const open=openId===f.id;
+    h+=`<div class="friend"><div class="fhead">
+      <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
+      <input type="text" value="${esc(f.name)}" data-name="${f.id}" aria-label="이름">
+      <span class="sub">${f.classes.length}개 수업</span>
+      <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>`;
+    if(open){
+      h+=`<div class="fbody">
+        <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요.</p>
+        <textarea id="paste-${f.id}" placeholder="MATH 137 | MWF | 10:30-11:20 | MC 2065&#10;CS 135 | TTh | 1:00PM-2:20PM | DC 1350&#10;경제원론 | 화목 | 14:30-15:50 | HH 1101"></textarea>
+        <div class="actions" style="margin-top:0"><label class="btn photo">📷 사진에서 글씨 읽기<input type="file" accept="image/*" data-photo="${f.id}" hidden></label></div>
+        <details class="help"><summary>어떤 형식을 읽을 수 있나요?</summary><pre>• Quest 시간표 복사본 (과목 줄 + "MWF 10:30AM - 11:20AM   MC 2065" 같은 줄)
+• 과목 | 요일 | 시작-끝 | 장소
+• 요일: M T W Th F (R도 목요일) 또는 월화수목금
+• 오전/오후 표시가 없고 1~7시면 오후로 봐요
+• 사진은 Quest List View 스크린샷이 제일 잘 읽혀요. 읽은 글씨를 확인하고 고친 다음 "시간표 읽기"를 누르세요</pre></details>
+        <div class="actions"><button class="btn primary" data-parse="${f.id}">시간표 읽기</button><button class="btn" data-parse-replace="${f.id}">기존 것 지우고 읽기</button></div>
+        <p class="msg" id="msg-${f.id}"></p>
+        ${f.classes.length?`<div class="tablewrap"><table><tr><th>과목</th><th>요일</th><th>시간</th><th>장소</th><th></th></tr>`+
+          f.classes.slice().sort((a,b)=>a.days[0]-b.days[0]||a.start-b.start).map(c=>`<tr><td>${esc(c.course)}${c.type?' <span class="sub">'+c.type+'</span>':''}</td><td>${c.days.map(d=>DAYS[d]).join('')}</td><td>${fmt(c.start)}–${fmt(c.end)}</td><td>${esc(c.loc)}</td><td><button class="btn small danger" data-delc="${f.id}:${c.id}" aria-label="삭제">삭제</button></td></tr>`).join('')+'</table></div>':''}
+        <div class="manual">
+          <input id="m-course-${f.id}" placeholder="과목">
+          <input id="m-days-${f.id}" placeholder="요일 (월수금)">
+          <input id="m-start-${f.id}" type="time" aria-label="시작">
+          <input id="m-end-${f.id}" type="time" aria-label="끝">
+          <input id="m-loc-${f.id}" placeholder="장소">
+          <button class="btn" data-manual="${f.id}">추가</button>
+        </div>
+        <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">친구 삭제</button></div>
+      </div>`;
+    }
+    h+='</div>';
+  });
+  return h;
+}
+
+function render(){
+  syncClock();
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
+  const v=document.getElementById('view');
+  v.innerHTML=tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage();
+}
+
+/* ---------- demo ---------- */
+function demo(){
+  const mk=(name,txt,i)=>({id:uid(),name,color:PALETTE[i%PALETTE.length],classes:parseTimetable(txt)});
+  state.friends.push(
+    mk('민준',`MATH 137 | MWF | 10:30AM-11:20AM | MC 2065
+CS 135 | TTh | 1:00PM-2:20PM | DC 1350
+CS 135 TUT | F | 2:30PM-3:20PM | MC 4059
+ECON 101 | TTh | 10:00AM-11:20AM | HH 1101`,state.friends.length),
+    mk('서연',`MATH 135 | MWF | 9:30AM-10:20AM | MC 1085
+PSYCH 101 | MW | 2:30PM-3:50PM | AL 116
+ENGL 109 | TTh | 11:30AM-12:50PM | EV3 1408
+PHYS 121 | MWF | 12:30PM-1:20PM | STC 0060`,state.friends.length+1));
+  sel=null; save(); render();
+}
+
+
+/* ---------- OCR (Tesseract.js, runs on device) ---------- */
+let tessLoading=null;
+function loadTess(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tessLoading) return tessLoading;
+  tessLoading=new Promise((res,rej)=>{
+    const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    sc.onload=res; sc.onerror=()=>{tessLoading=null;rej(new Error('load'))};
+    document.head.appendChild(sc);
+  });
+  return tessLoading;
+}
+function cleanOCR(t){
+  return t
+    .replace(/(\d)[Oo]/g,'$10').replace(/[Oo](\d)/g,'0$1')
+    .replace(/(\d)[lI|](?=\d|:)/g,'$11').replace(/(?<=[\d:])[lI](\d)/g,'1$1')
+    .replace(/(\d)\s*[;.]\s*(\d{2})\s*(?=[AaPp][Mm]|\s|-|–|$)/g,'$1:$2')
+    .replace(/(\d)\s+([AaPp])\s?[Mm]\b/g,'$1$2M')
+    .replace(/[—–]/g,'-');
+}
+async function readPhoto(id,file){
+  const m=document.getElementById('msg-'+id), box=document.getElementById('paste-'+id);
+  const say=(t,c='')=>{m.className='msg '+c;m.textContent=t};
+  try{
+    say('글씨 인식 도구를 불러오는 중… (처음 한 번만 조금 걸려요)');
+    await loadTess();
+    const worker=await Tesseract.createWorker('eng',1,{logger:x=>{
+      if(x.status==='recognizing text') say(`사진 읽는 중… ${Math.round(x.progress*100)}%`);
+    }});
+    const {data}=await worker.recognize(file);
+    await worker.terminate();
+    const text=cleanOCR(data.text||'').trim();
+    if(!text){say('사진에서 글씨를 찾지 못했어요. 더 선명하게 찍거나 확대한 스크린샷으로 다시 해보세요.','err');return}
+    box.value=(box.value.trim()?box.value.trim()+'\n':'')+text;
+    const n=parseTimetable(text).length;
+    say(n?`수업 ${n}개로 보이는 줄을 찾았어요. 아래 글씨를 확인하고 틀린 곳을 고친 다음 "시간표 읽기"를 누르세요.`
+         :'글씨는 읽었는데 수업 시간을 못 찾았어요. 아래에서 시간을 "10:30AM - 11:20AM"처럼 고쳐 주세요.', n?'ok':'err');
+    box.focus();
+  }catch(err){
+    say('글씨 인식 도구를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.','err');
+  }
+}
+
+/* ---------- events ---------- */
+document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;render()}});
+const daySel=document.getElementById('daySel');
+DAYS.forEach((d,i)=>daySel.insertAdjacentHTML('beforeend',`<option value="${i}">${d}요일</option>`));
+function setLive(on){live=on;document.getElementById('liveBtn').classList.toggle('on',on);render()}
+document.getElementById('liveBtn').addEventListener('click',()=>setLive(true));
+daySel.addEventListener('change',()=>setLive(false));
+document.getElementById('timeSel').addEventListener('change',()=>setLive(false));
+
+const view=document.getElementById('view');
+view.addEventListener('click',e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  const d=t.dataset;
+  if(d.act==='goManage'){tab='manage';addFriend();return}
+  if(d.act==='demo'){demo();return}
+  if(d.act==='add'){addFriend();return}
+  if(d.chip){sel.has(d.chip)?sel.delete(d.chip):sel.add(d.chip);render();return}
+  if(d.toggle){openId=openId===d.toggle?null:d.toggle;render();return}
+  if(d.parse||d.parseReplace){
+    const id=d.parse||d.parseReplace, f=state.friends.find(x=>x.id===id);
+    const txt=document.getElementById('paste-'+id).value;
+    const got=parseTimetable(txt);
+    if(!got.length){const m=document.getElementById('msg-'+id);m.className='msg err';m.textContent='수업을 하나도 찾지 못했어요. 요일과 “10:30-11:20” 같은 시간이 한 줄에 있는지 확인해 주세요.';return}
+    f.classes=d.parseReplace?got:f.classes.concat(got); save(); render();
+    const m=document.getElementById('msg-'+id);m.className='msg ok';m.textContent=`수업 ${got.length}개를 읽었어요.`;return;
+  }
+  if(d.manual){
+    const id=d.manual,f=state.friends.find(x=>x.id===id),g=k=>document.getElementById(`m-${k}-${id}`).value.trim();
+    const days=parseDays(g('days')),st=g('start'),en=g('end');
+    const m=document.getElementById('msg-'+id);
+    if(!days.length||!st||!en){m.className='msg err';m.textContent='요일, 시작, 끝 시간을 모두 입력해 주세요.';return}
+    const s=parseTime(st),en2=parseTime(en);
+    if(en2<=s){m.className='msg err';m.textContent='끝 시간이 시작 시간보다 늦어야 해요.';return}
+    f.classes.push({id:uid(),course:g('course')||'수업',type:'',days,start:s,end:en2,loc:g('loc')});save();render();return;
+  }
+  if(d.delc){const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
+  if(d.delf){const f=state.friends.find(x=>x.id===d.delf);if(confirm(`${f.name}을(를) 삭제할까요?`)){state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);save();render()}return}
+});
+view.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.photo&&t.files&&t.files[0]){readPhoto(t.dataset.photo,t.files[0]);t.value='';return}
+  if(t.dataset.name){const f=state.friends.find(x=>x.id===t.dataset.name);f.name=t.value.trim()||f.name;save()}
+  if(t.dataset.color){const f=state.friends.find(x=>x.id===t.dataset.color);f.color=t.value;save()}
+});
+function addFriend(){
+  const f={id:uid(),name:'친구 '+(state.friends.length+1),color:PALETTE[state.friends.length%PALETTE.length],classes:[]};
+  state.friends.push(f);openId=f.id;sel&&sel.add(f.id);save();render();
+  const inp=document.querySelector(`[data-name="${f.id}"]`);if(inp){inp.focus();inp.select()}
+}
+
+load(); render();
+setInterval(()=>{if(live&&tab!=='manage')render()},30000);
+</script>
+</body>
+</html>
