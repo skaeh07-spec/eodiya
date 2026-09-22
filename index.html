@@ -116,12 +116,21 @@ textarea{width:100%;min-height:110px;border:1.5px solid var(--line);border-radiu
 .btn.small{padding:5px 11px;font-size:13px}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+td,th{padding:8px 6px;white-space:nowrap;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--muted);font-weight:500;font-size:12.5px}
 .tablewrap{overflow-x:auto}
 .manual{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr 1fr auto;gap:6px;margin-top:10px}
 .manual input{border:none;background:var(--soft);border-radius:10px;padding:7px 9px;min-width:0}
 .backup{margin-top:18px}
+h2.sec{font-family:"Do Hyeon",sans-serif;font-weight:400;font-size:24px;margin:20px 4px 10px}
+h2.sec:first-child{margin-top:4px}
+.field{flex:1;min-width:160px;border:none;background:var(--soft);border-radius:12px;padding:9px 12px}
+.mebadge{display:inline-block;background:var(--fc);color:#fff;border-radius:8px;padding:0 7px;font-size:12px}
+.sharebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:0 14px 12px}
+.addbox{margin-bottom:12px}
+.invite{text-align:center;margin-bottom:14px;border:2px solid var(--sun)}
+.invite .big{font-size:40px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .backup h2{font-size:17px;margin:0 0 4px}
 @media (max-width:640px){
   .manual{grid-template-columns:1fr 1fr}
@@ -171,7 +180,10 @@ const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB
 const START=8*60, END=22*60, MIN_FREE=30;
 
 let state={friends:[]};
-let tab='now', live=true, sel=null, openId=null;
+let tab='now', live=true, sel=null, openId=null, pending=null;
+const meOf=()=>state.friends.find(f=>f.isMe);
+const others=()=>state.friends.filter(f=>!f.isMe);
+const label=f=>f.isMe?'나':f.name;
 
 function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}}
 function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
@@ -268,7 +280,7 @@ function selected(){
 function chipsHTML(){
   if(!sel) sel=new Set(state.friends.map(f=>f.id));
   return '<div class="chips">'+state.friends.map(f=>
-    `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot"></span>${esc(f.name)}</button>`).join('')+'</div>';
+    `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot"></span>${esc(label(f))}</button>`).join('')+'</div>';
 }
 
 
@@ -282,26 +294,70 @@ function backupHTML(){
   <p class="msg" id="bk-msg"></p></div>`;
 }
 function exportCode(){
-  const data=state.friends.map(f=>({n:f.name,c:f.color,k:f.classes.map(c=>[c.course,c.type,c.days.join(''),c.start,c.end,c.loc])}));
+  const data=state.friends.map(f=>Object.assign(packPerson(f),f.isMe?{me:1}:{}));
   return 'EODIYA1:'+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
 }
 function importCode(code){
   const raw=code.trim().replace(/^EODIYA1:/,'').replace(/\s+/g,'');
   const data=JSON.parse(decodeURIComponent(escape(atob(raw))));
   if(!Array.isArray(data)) throw new Error('bad');
-  return data.map(f=>({id:uid(),name:String(f.n||'친구'),color:/^#[0-9a-f]{6}$/i.test(f.c)?f.c:PALETTE[0],
-    classes:(f.k||[]).map(k=>({id:uid(),course:String(k[0]),type:String(k[1]||''),days:String(k[2]).split('').map(Number).filter(n=>n>=0&&n<7),start:+k[3],end:+k[4],loc:String(k[5]||'')})).filter(c=>c.days.length&&c.end>c.start)}));
+  return data.map(o=>Object.assign(unpackPerson(o),o.me?{isMe:true}:{}));
+}
+
+
+/* ---------- share one person ---------- */
+const b64u=str=>btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64u=str=>{str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%4)str+='=';return decodeURIComponent(escape(atob(str)))};
+const packPerson=f=>({u:f.uid,n:f.name,c:f.color,k:f.classes.map(c=>[c.course,c.type,c.days.join(''),c.start,c.end,c.loc])});
+function unpackPerson(o){
+  return{id:uid(),uid:o.u||null,name:String(o.n||'친구').slice(0,30),color:/^#[0-9a-f]{6}$/i.test(o.c)?o.c:PALETTE[0],
+    classes:(o.k||[]).map(k=>({id:uid(),course:String(k[0]),type:String(k[1]||''),days:String(k[2]).split('').map(Number).filter(n=>n>=0&&n<7),start:+k[3],end:+k[4],loc:String(k[5]||'')})).filter(c=>c.days.length&&c.end>c.start)};
+}
+function shareLink(){
+  const me=meOf();
+  return location.origin+location.pathname+'#add='+b64u(JSON.stringify(packPerson(me)));
+}
+function personFromText(text){
+  const m=String(text).match(/#add=([A-Za-z0-9_-]+)/);
+  if(!m) return null;
+  return unpackPerson(JSON.parse(unb64u(m[1])));
+}
+function addPerson(p){
+  const me=meOf();
+  if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
+  const ex=p.uid&&others().find(f=>f.uid===p.uid);
+  if(ex){ex.name=p.name;ex.classes=p.classes;save();return{kind:'updated',f:ex}}
+  p.color=PALETTE[state.friends.length%PALETTE.length];
+  state.friends.push(p);sel&&sel.add(p.id);save();return{kind:'added',f:p};
+}
+function pendingHTML(){
+  if(!pending) return '';
+  const me=meOf();
+  if(me&&pending.uid===me.uid) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
+  const ex=pending.uid&&others().find(f=>f.uid===pending.uid);
+  return `<div class="panel invite"><div class="big">👋</div>
+    <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':'친구로 추가할까요?'}</p>
+    <div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendYes">${ex?'업데이트':'추가하기'}</button><button class="btn" data-act="pendNo">취소</button></div>
+    <p class="sub">홈 화면에 추가한 앱을 쓰고 있다면, 받은 메시지를 복사해서 앱의 친구 관리 → "친구 추가"에 붙여넣어 주세요. 브라우저와 앱은 저장 공간이 따로예요.</p></div>`;
+}
+function checkHash(){
+  if(!location.hash.startsWith('#add=')) return;
+  try{pending=personFromText(location.hash)}catch(e){pending=null}
+  history.replaceState(null,'',location.pathname+location.search);
+  if(pending) tab='now';
 }
 
 /* ---------- views ---------- */
 function emptyHTML(){
-  return `<div class="panel empty"><div class="big">🗺️</div><p>아직 친구가 없어요. 친구를 추가하고 시간표를 붙여넣어 보세요.</p>
-  <div class="actions" style="justify-content:center"><button class="btn primary" data-act="goManage">친구 추가하기</button><button class="btn sunny" data-act="demo">예시로 둘러보기</button></div></div>`;
+  const me=meOf();
+  return `<div class="panel empty"><div class="big">🗺️</div>
+  <p>${me?'아직 친구가 없어요. 내 시간표를 공유하고, 친구한테 받은 링크를 열면 여기에 나타나요.':'먼저 내 시간표를 만들고 친구들한테 공유해 보세요. 친구도 자기 시간표를 보내주면 서로 어디 있는지 알 수 있어요.'}</p>
+  <div class="actions" style="justify-content:center"><button class="btn primary" data-act="goManage">${me?'내 시간표 공유하기':'내 시간표 만들기'}</button><button class="btn sunny" data-act="demo">예시로 둘러보기</button></div></div>`;
 }
 function viewNow(){
-  if(!state.friends.length) return emptyHTML();
+  if(!others().length) return emptyHTML();
   const r=ref();
-  const rows=state.friends.map(f=>{
+  const rows=others().map(f=>{
     const s=statusOf(f,r); let where,sub,badge;
     if(s.busy){
       where=esc(s.cur.loc||'강의실 미정');
@@ -338,7 +394,7 @@ function viewGrid(){
     fs.forEach((f,i)=>{
       const w=100/fs.length;
       classesOn(f,d).forEach(c=>{
-        h+=`<div class="blk" title="${esc(f.name)} · ${esc(c.course)} ${fmt(c.start)}–${fmt(c.end)} ${esc(c.loc)}" style="top:${(c.start-lo)*PX}px;height:${(c.end-c.start)*PX-2}px;left:calc(${i*w}% + 2px);width:calc(${w}% - 4px);background:${f.color}">
+        h+=`<div class="blk" title="${esc(label(f))} · ${esc(c.course)} ${fmt(c.start)}–${fmt(c.end)} ${esc(c.loc)}" style="top:${(c.start-lo)*PX}px;height:${(c.end-c.start)*PX-2}px;left:calc(${i*w}% + 2px);width:calc(${w}% - 4px);background:${f.color}">
           <b>${esc(c.course)}</b>${esc(c.loc)}</div>`;
       });
     });
@@ -363,17 +419,30 @@ function viewFree(){
   return h+'</div>';
 }
 function viewManage(){
-  return viewFriends()+backupHTML();
+  const me=meOf();
+  let h=`<h2 class="sec">내 시간표</h2>`;
+  if(!me){
+    h+=`<div class="panel mecta"><p>이름을 적고 내 시간표를 만들어요. 한 번만 입력해 두면 친구들한테 링크로 보낼 수 있어요.</p>
+      <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div></div>`;
+  } else h+=friendCard(me);
+  h+=`<h2 class="sec">친구</h2>
+  <div class="panel addbox"><p class="hint">친구한테 받은 공유 메시지나 링크를 통째로 붙여넣으세요.</p>
+    <textarea id="add-box" style="min-height:70px" placeholder="예: 도건의 시간표야! … https://…#add=…"></textarea>
+    <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="btn" data-act="add">직접 입력해서 추가</button>${state.friends.length?'':'<button class="btn sunny" data-act="demo">예시 넣기</button>'}</div>
+    <p class="msg" id="add-msg"></p></div>`;
+  others().forEach(f=>h+=friendCard(f));
+  return h+backupHTML();
 }
-function viewFriends(){
-  let h=`<div class="actions"><button class="btn primary" data-act="add">친구 추가</button>${state.friends.length?'':'<button class="btn" data-act="demo">예시 넣기</button>'}</div>`;
-  state.friends.forEach(f=>{
+function friendCard(f){
+  let h='';
+  {
     const open=openId===f.id;
     h+=`<div class="friend" style="--fc:${f.color}"><div class="fhead">
       <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
       <input type="text" value="${esc(f.name)}" data-name="${f.id}" aria-label="이름">
-      <span class="sub">${f.classes.length}개 수업</span>
-      <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>`;
+      <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${f.classes.length}개 수업</span>
+      <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
+      ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg">${f.classes.length?'카톡으로 링크를 보내면 친구가 눌러서 바로 추가해요':'시간표를 먼저 입력하면 공유할 수 있어요'}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
         <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요.</p>
@@ -396,11 +465,11 @@ function viewFriends(){
           <input id="m-loc-${f.id}" placeholder="장소">
           <button class="btn" data-manual="${f.id}">추가</button>
         </div>
-        <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">친구 삭제</button></div>
+        <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">${f.isMe?'내 시간표 삭제':'친구 삭제'}</button></div>
       </div>`;
     }
     h+='</div>';
-  });
+  }
   return h;
 }
 
@@ -408,7 +477,7 @@ function render(){
   syncClock();
   document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
   const v=document.getElementById('view');
-  v.innerHTML=tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage();
+  v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage());
 }
 
 /* ---------- demo ---------- */
@@ -576,9 +645,34 @@ const view=document.getElementById('view');
 view.addEventListener('click',e=>{
   const t=e.target.closest('button'); if(!t) return;
   const d=t.dataset;
-  if(d.act==='goManage'){tab='manage';addFriend();return}
+  if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='makeMe'){
+    const name=(document.getElementById('me-name').value||'').trim()||'나';
+    const me={id:uid(),uid:'u'+uid()+uid(),isMe:true,name,color:PALETTE[0],classes:[]};
+    state.friends.unshift(me);openId=me.id;sel&&sel.add(me.id);save();render();return;
+  }
+  if(d.act==='share'){
+    const me=meOf(),link=shareLink(),text=`${me.name}의 시간표야! 눌러서 '어디야?'에 추가해줘 📍\n${link}`;
+    const m=document.getElementById('share-msg');
+    const copied=()=>{m.textContent='공유 메시지를 복사했어요. 카톡에 붙여넣어 보내세요.'};
+    if(navigator.share){navigator.share({title:'어디야? 시간표',text}).catch(()=>{});return}
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied,()=>prompt('이 메시지를 복사해서 보내세요',text));
+    else prompt('이 메시지를 복사해서 보내세요',text);
+    return;
+  }
+  if(d.act==='addCode'){
+    const m=document.getElementById('add-msg');
+    let p=null;try{p=personFromText(document.getElementById('add-box').value)}catch(e){}
+    if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지 전체(#add= 가 들어간 링크 포함)를 붙여넣어 주세요.';return}
+    const r=addPerson(p);render();
+    const m2=document.getElementById('add-msg');m2.className='msg '+(r.kind==='me'?'err':'ok');
+    m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!`;
+    return;
+  }
+  if(d.act==='pendYes'){addPerson(pending);pending=null;tab='now';render();return}
+  if(d.act==='pendNo'){pending=null;render();return}
   if(d.act==='export'){
     const code=exportCode(),box=document.getElementById('bk-box'),m=document.getElementById('bk-msg');
     box.value=code;
@@ -628,12 +722,13 @@ view.addEventListener('change',e=>{
   if(t.dataset.color){const f=state.friends.find(x=>x.id===t.dataset.color);f.color=t.value;save();render()}
 });
 function addFriend(){
-  const f={id:uid(),name:'친구 '+(state.friends.length+1),color:PALETTE[state.friends.length%PALETTE.length],classes:[]};
+  const f={id:uid(),name:'친구 '+(others().length+1),color:PALETTE[state.friends.length%PALETTE.length],classes:[]};
   state.friends.push(f);openId=f.id;sel&&sel.add(f.id);save();render();
   const inp=document.querySelector(`[data-name="${f.id}"]`);if(inp){inp.focus();inp.select()}
 }
 
-load(); render();
+load(); checkHash(); render();
+window.addEventListener('hashchange',()=>{checkHash();render()});
 setInterval(()=>{if(live&&tab!=='manage')render()},30000);
 </script>
 </body>
