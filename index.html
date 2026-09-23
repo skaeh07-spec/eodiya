@@ -172,6 +172,8 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 #netBadge{font-size:12px;font-weight:700;color:#fff;background:var(--busy);border-radius:999px;padding:3px 9px}
 .install{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;border:1.5px solid var(--accent)}
 .install>div{flex:1;min-width:200px}
+.expbox{margin-top:14px;background:var(--soft);border-radius:16px;padding:12px}
+.expbox input[type=date]{border:none;background:var(--panel);border-radius:10px;padding:7px 9px}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
@@ -269,7 +271,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0924-2';
+const APP_VER='0924-4';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -317,11 +319,11 @@ function syncClock(){
 
 /* ---------- parsing ---------- */
 const DAY_KO={'월':0,'화':1,'수':2,'목':3,'금':4,'토':5,'일':6};
-const DAY_EN={M:0,T:1,W:2,Th:3,R:3,F:4,Sa:5,Su:6};
+const DAY_EN={Mo:0,Tu:1,We:2,Th:3,Fr:4,Sa:5,Su:6,M:0,T:1,W:2,R:3,F:4};
 function parseDays(s){
   const out=new Set();
   if(/[월화수목금토일]/.test(s)){for(const ch of s) if(ch in DAY_KO) out.add(DAY_KO[ch])}
-  else (s.match(/Th|Sa|Su|M|T|W|F|R/g)||[]).forEach(t=>out.add(DAY_EN[t]));
+  else (s.match(/Mo|Tu|We|Th|Fr|Sa|Su|M|T|W|F|R/g)||[]).forEach(t=>out.add(DAY_EN[t]));
   return [...out].sort((a,b)=>a-b);
 }
 function parseTime(s){
@@ -332,16 +334,39 @@ function parseTime(s){
   return h*60+mi;
 }
 const COMP=/\b(LEC|TUT|LAB|SEM|TST|PRJ|CLN|DIS|STU|WSP)\b/;
+/* Quest pages copied from a phone or some browsers put every table cell on its own line.
+   Rebuild one row per meeting: component + days/time + room + dates. */
+function questRows(text){
+  const L=text.split(/\r?\n/).map(x=>x.trim());
+  const timeOnly=/^((?:Mo|Tu|We|Th|Fr|Sa|Su|M|T|W|F|R)+)\s+\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?\s*-\s*\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?$/;
+  const roomRe=/^([A-Z]{1,5}\d?\s?\d{3,4}[A-Z]?|TBA|ONLN.*|Online.*)$/;
+  const dateRe=/^\d{1,2}\/\d{1,2}\/\d{4}\s*[-–]\s*\d{1,2}\/\d{1,2}\/\d{4}$/;
+  const out=[];
+  for(let i=0;i<L.length;i++){
+    if(!timeOnly.test(L[i])){out.push(L[i]);continue}
+    let comp='';for(let j=i-1;j>=Math.max(0,i-3);j--){const m=L[j].match(COMP);if(m&&L[j].length<=4){comp=m[1];break}if(timeOnly.test(L[j]))break}
+    let room='',dates='',j=i+1;
+    for(;j<L.length&&j<=i+4;j++){
+      if(timeOnly.test(L[j])||/\b[A-Z]{2,6}\s?\d{2,3}[A-Z]?\s*-\s*[A-Za-z]/.test(L[j]))break;
+      if(!room&&roomRe.test(L[j]))room=L[j];
+      else if(!dates&&dateRe.test(L[j])){dates=L[j];j++;break}
+    }
+    out.push([comp,L[i],room,dates].join('\t'));
+    i=j-1;
+  }
+  return out.join('\n');
+}
 function parseTimetable(text){
+  text=questRows(text);
   const out=[]; let course='';
-  const courseRe=/^\s*([A-Z]{2,6})\s?(\d{2,3}[A-Z]?)\b/;
-  const dtRe=/(?<![A-Za-z])((?:Th|Sa|Su|M|T|W|F|R)+|[월화수목금토일]+)[\s,|/]*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)\s*[-–~]\s*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)/;
+  const courseRe=/\b([A-Z]{2,6})\s?(\d{2,3}[A-Z]?)\b(?=\s*-\s*[A-Za-z(])|^\s*([A-Z]{2,6})\s?(\d{2,3}[A-Z]?)\b/;
+  const dtRe=/(?<![A-Za-z])((?:Mo|Tu|We|Th|Fr|Sa|Su|M|T|W|F|R)+|[월화수목금토일]+)[\s,|/]*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)\s*[-–~]\s*(\d{1,2}:\d{2}\s*(?:[AaPp][Mm])?)/;
   for(const raw of text.split(/\r?\n/)){
     const line=raw.trim(); if(!line) continue;
-    const cm=line.match(courseRe);
-    const isCourse=cm&&!COMP.test(cm[1]);
+    const cm=line.match(courseRe),cs=cm&&(cm[1]||cm[3]),cn=cm&&(cm[2]||cm[4]);
+    const isCourse=cm&&!COMP.test(cs)&&!/^(TBA|ONLN)$/.test(cs);
     const dm=line.match(dtRe);
-    if(isCourse) course=cm[1]+' '+cm[2];
+    if(isCourse&&!(dm&&cm.index>dm.index)) course=cs+' '+cn;
     if(!dm) continue;
     if(line.includes('|')){const first=line.split('|')[0].trim();if(first&&!dtRe.test(first))course=first.replace(/\s+(LEC|TUT|LAB)$/,'')}
     const days=parseDays(dm[1]), st=parseTime(dm[2]), en=parseTime(dm[3]);
@@ -351,9 +376,25 @@ function parseTimetable(text){
     let loc=room?room[1]:((after.split(/\t|\||,|\s{2,}/).map(x=>x.trim()).filter(Boolean)[0])||'');
     if(/^tba$/i.test(loc)) loc='';
     const comp=(line.match(COMP)||[])[1]||'';
-    out.push({id:uid(),course:course||'수업',type:comp,days,start:st,end:en,loc});
+    const cls={id:uid(),course:course||'수업',type:comp,days,start:st,end:en,loc};
+    const dr=line.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s*[-–~]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(dr){
+      const mk=(a,b,y)=>{a=+a;b=+b;const [mo,da]=a>12?[b,a]:[a,b];if(mo<1||mo>12||da<1||da>31)return null;return y+pad2(mo)+pad2(da)};
+      const f=mk(dr[1],dr[2],dr[3]),t=mk(dr[4],dr[5],dr[6]);
+      if(f&&t&&f===t){ // one day only (e.g. a test): that date's week & weekday
+        const d=keyDate(f);cls.days=[(d.getDay()+6)%7];cls.rep='s';cls.weeks=[mondayKey(d)];if(/tst|exam|midterm/i.test(line))cls.type=cls.type||'TST';
+      }else if(f&&t&&f<t){if(f>todayKey())cls.from=f;cls.to=t}
+    }
+    out.push(cls);
   }
-  return out;
+  const merged=[];
+  for(const c of out){
+    const twin=merged.find(o=>o.course===c.course&&o.type===c.type&&o.start===c.start&&o.end===c.end&&o.loc===c.loc&&(o.rep||'')===(c.rep||'')&&(o.to||'')===(c.to||'')&&(c.rep!=='s'||o.days.join()===c.days.join()));
+    if(!twin){merged.push(c);continue}
+    if(c.rep==='s') twin.weeks=[...new Set(twin.weeks.concat(c.weeks))].sort();
+    else twin.days=[...new Set(twin.days.concat(c.days))].sort((a,b)=>a-b);
+  }
+  return merged;
 }
 
 /* ---------- status ---------- */
@@ -517,6 +558,141 @@ function saveClass(key,box){
   if(cid==='new') f.classes.push(Object.assign({id:uid(),course,type,days,start,end,loc},rec));
   else Object.assign(f.classes.find(x=>x.id===cid),{course,type,days,start,end,loc},rec);
   editCls=null;save();render();
+}
+
+
+/* ---------- calendar files (.ics) ---------- */
+const BYDAY=['MO','TU','WE','TH','FR','SA','SU'];
+const mondayKey=d=>keyOfDate(new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7)));
+const keyDate=k=>new Date(+k.slice(0,4),+k.slice(4,6)-1,+k.slice(6,8));
+const addDaysKey=(k,n)=>{const d=keyDate(k);d.setDate(d.getDate()+n);return keyOfDate(d)};
+const icsUnesc=v=>String(v||'').replace(/\\n/gi,' ').replace(/\\([,;\\])/g,'$1').trim();
+function icsDate(o){
+  if(!o) return null;
+  const m=o.v.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/); if(!m) return null;
+  if(!m[4]) return {d:new Date(+m[1],+m[2]-1,+m[3]),allDay:true};
+  return {d:m[7]?new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])):new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5])};
+}
+function icsLoc(v){
+  v=icsUnesc(v).replace(/\s+/g,' ');
+  const m=v.match(/^([A-Z][A-Z0-9]{1,4})\b.*?\b(\d{3,4}[A-Z]?)\s*$/);
+  return (m?m[1]+' '+m[2]:v).slice(0,40);
+}
+function parseICS(text){
+  const lines=String(text).replace(/\r?\n[ \t]/g,'').split(/\r?\n/);
+  const evs=[];let ev=null;
+  for(const l of lines){
+    if(/^BEGIN:VEVENT/i.test(l)){ev={};continue}
+    if(/^END:VEVENT/i.test(l)){if(ev)evs.push(ev);ev=null;continue}
+    if(!ev) continue;
+    const i=l.indexOf(':'); if(i<0) continue;
+    const [name,...ps]=l.slice(0,i).split(';'),P={};
+    ps.forEach(p=>{const [k,v]=p.split('=');P[(k||'').toUpperCase()]=v});
+    ev[name.toUpperCase()]={v:l.slice(i+1),P};
+  }
+  const groups=new Map();
+  for(const e of evs){
+    if(/^CANCELLED$/i.test((e.STATUS||{}).v||'')) continue;
+    const s=icsDate(e.DTSTART); if(!s||s.allDay) continue;
+    let en=icsDate(e.DTEND);
+    if(!en&&e.DURATION){const m=e.DURATION.v.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);if(m)en={d:new Date(s.d.getTime()+((+m[1]||0)*60+(+m[2]||0))*60000)}}
+    if(!en) continue;
+    const start=s.d.getHours()*60+s.d.getMinutes(),end=en.d.getHours()*60+en.d.getMinutes();
+    if(end<=start) continue;
+    const sum=icsUnesc((e.SUMMARY||{}).v);
+    const cm=sum.match(/\b([A-Z]{2,6})\s?(\d{2,3}[A-Z]?)\b/);
+    const course=cm&&!COMP.test(cm[1])?cm[1]+' '+cm[2]:(sum.slice(0,40)||'일정');
+    const type=(sum.match(COMP)||[])[1]||(/midterm|final|exam|quiz|test|시험|퀴즈/i.test(sum)?'TST':'');
+    const loc=icsLoc((e.LOCATION||{}).v);
+    const startKey=keyOfDate(s.d),wd=(s.d.getDay()+6)%7;
+    const c={course,type,start,end,loc};
+    const rr=e.RRULE&&Object.fromEntries(e.RRULE.v.split(';').map(x=>x.split('=')).map(([k,v])=>[k.toUpperCase(),v]));
+    let key;
+    if(rr&&rr.FREQ==='WEEKLY'){
+      c.days=rr.BYDAY?[...new Set(rr.BYDAY.split(',').map(x=>BYDAY.indexOf(x.replace(/^[+-]?\d+/,'').toUpperCase())).filter(x=>x>=0))]:[wd];
+      const iv=+(rr.INTERVAL||1);
+      if(iv===2){c.rep='b';c.anchor=mondayKey(s.d)}
+      c.from=startKey;
+      if(rr.UNTIL){const u=icsDate({v:rr.UNTIL});if(u)c.to=keyOfDate(u.d)}
+      else if(rr.COUNT){const wks=Math.ceil(+rr.COUNT/c.days.length)*iv;c.to=addDaysKey(mondayKey(s.d),wks*7-1)}
+      key=[course,type,start,end,loc,c.rep||'',c.anchor||'',c.from,c.to||''].join('|');
+    }else if(!rr){ // one-off: becomes "specific week"
+      c.days=[wd];c.rep='s';c.weeks=[mondayKey(s.d)];
+      key=[course,type,start,end,loc,'one',wd].join('|');
+    }else continue;
+    const g=groups.get(key);
+    if(!g) groups.set(key,c);
+    else if(c.rep==='s') g.weeks=[...new Set(g.weeks.concat(c.weeks))].sort();
+    else g.days=[...new Set(g.days.concat(c.days))];
+  }
+  // merge weekly groups that only differ by weekday but started on different dates of the same week
+  const out=[];
+  for(const c of groups.values()){
+    const twin=out.find(o=>o.rep!=='s'&&c.rep!=='s'&&o.course===c.course&&o.type===c.type&&o.start===c.start&&o.end===c.end&&o.loc===c.loc&&(o.rep||'')===(c.rep||'')&&(o.to||'')===(c.to||'')&&mondayKey(keyDate(o.from))===mondayKey(keyDate(c.from)));
+    if(twin){twin.days=[...new Set(twin.days.concat(c.days))].sort((a,b)=>a-b);if(c.from<twin.from)twin.from=c.from}
+    else out.push(c);
+  }
+  return out.map(c=>{c.days.sort((a,b)=>a-b);if(c.from&&c.rep!=='b'&&c.from<=todayKey()&&!c.to)delete c.from;return Object.assign({id:uid()},c)});
+}
+function toICS(f,defUntil){
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//eodiya//timetable//KO','CALSCALE:GREGORIAN','X-WR-CALNAME:'+icsEsc((f.isMe?f.name:dn(f))+' 시간표')];
+  const now=new Date(),stamp=now.getUTCFullYear()+pad2(now.getUTCMonth()+1)+pad2(now.getUTCDate())+'T'+pad2(now.getUTCHours())+pad2(now.getUTCMinutes())+'00Z';
+  const dt=(k,m)=>k+'T'+pad2(Math.floor(m/60))+pad2(m%60)+'00';
+  const ev=(c,k,extra)=>{L.push('BEGIN:VEVENT','UID:'+f.id+'-'+c.id+'-'+k+'@eodiya','DTSTAMP:'+stamp,'DTSTART:'+dt(k,c.start),'DTEND:'+dt(k,c.end),
+    'SUMMARY:'+icsEsc(c.course+(c.type?' '+c.type:'')),...(c.loc?['LOCATION:'+icsEsc(c.loc)]:[]),...extra,'END:VEVENT')};
+  for(const c of f.classes){
+    if(c.off||!c.days.length) continue;
+    if(c.rep==='s'){
+      for(const w of c.weeks||[]) for(const d of c.days){const k=addDaysKey(w,d);if((c.from&&k<c.from)||(c.to&&k>c.to))continue;if(c.skip===k)continue;ev(c,k,[])}
+      continue;
+    }
+    const iv=c.rep==='b'?2:1,begin=c.from||dateKey(0,0);
+    let wk=mondayKey(keyDate(begin));
+    if(c.rep==='b'&&c.anchor&&Math.round((keyUTC(wk)-keyUTC(c.anchor))/(7*864e5))%2!==0) wk=addDaysKey(wk,7);
+    let first=null;
+    for(let tries=0;tries<3&&!first;tries++){
+      for(const d of c.days){const k=addDaysKey(wk,d);if(k>=begin){first=k;break}}
+      if(!first) wk=addDaysKey(wk,7*iv);
+    }
+    if(!first) continue;
+    const until=c.to||defUntil;
+    const extra=['RRULE:FREQ=WEEKLY'+(iv>1?';INTERVAL='+iv:'')+';BYDAY='+c.days.map(d=>BYDAY[d]).join(',')+(until?';UNTIL='+until+'T235959':'')];
+    if(c.skip&&c.skip>=first) extra.push('EXDATE:'+dt(c.skip,c.start));
+    ev(c,first,extra);
+  }
+  L.push('END:VCALENDAR');
+  return L.map(foldICS).join('\r\n')+'\r\n';
+}
+function icsEsc(v){return String(v).replace(/[\\;,]/g,m=>'\\'+m).replace(/\r?\n/g,'\\n')}
+function foldICS(line){ // lines longer than 75 bytes must be folded
+  const enc=new TextEncoder();if(enc.encode(line).length<=75) return line;
+  let out='',cur='';for(const ch of line){if(enc.encode(cur+ch).length>(out?74:75)){out+=(out?'\r\n ':'')+cur;cur=''}cur+=ch}
+  return out+'\r\n '+cur;
+}
+function exportHTML(f){
+  if(!f.classes.length) return '';
+  const def=addDaysKey(todayKey(),7*14),iso=k=>k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8);
+  return `<div class="expbox"><b>📅 캘린더로 내보내기</b>
+    <p class="sub" style="margin:4px 0 8px">아이폰 캘린더나 구글 캘린더에 이 시간표를 넣어요. 끝나는 날이 정해지지 않은 수업은 아래 날짜까지 반복해요.</p>
+    <div class="ce-row"><span class="sub">반복 끝나는 날</span><input type="date" id="ics-until-${f.id}" value="${iso(def)}"></div>
+    <div class="actions" style="margin-bottom:0"><button class="btn" data-icsdl="${f.id}">파일 받기</button>${navigator.canShare?`<button class="btn" data-icsshare="${f.id}">공유…</button>`:''}</div>
+    <p class="msg" id="icsmsg-${f.id}"></p></div>`;
+}
+function icsFile(fid){
+  const f=state.friends.find(x=>x.id===fid),u=(document.getElementById('ics-until-'+fid)||{}).value;
+  const text=toICS(f,u?u.replace(/-/g,''):'');
+  const name=((f.isMe?f.name:dn(f))+'-시간표').replace(/[\\/:*?"<>|]/g,'')+'.ics';
+  return new File([text],name,{type:'text/calendar'});
+}
+function importICSInto(fid,text){
+  const f=state.friends.find(x=>x.id===fid),m=document.getElementById('msg-'+fid);
+  const got=parseICS(text);
+  if(!got.length){if(m){m.className='msg err';m.textContent='캘린더 파일에서 시간이 정해진 수업을 찾지 못했어요.'}return}
+  const same=(a,b)=>a.course===b.course&&a.start===b.start&&a.end===b.end&&a.days.join()===b.days.join()&&(a.rep||'')===(b.rep||'');
+  const fresh=got.filter(c=>!f.classes.some(o=>same(o,c)));
+  f.classes=f.classes.concat(fresh);save();render();
+  const m2=document.getElementById('msg-'+fid);
+  if(m2){m2.className='msg ok';m2.textContent=`캘린더에서 수업 ${got.length}개를 찾아서 ${fresh.length}개를 새로 넣었어요.${got.length-fresh.length?' (이미 있는 '+(got.length-fresh.length)+'개는 건너뛰었어요)':''} 아래 목록에서 확인해 주세요.`}
 }
 
 /* ---------- backup ---------- */
@@ -785,9 +961,9 @@ function friendCard(f){
       ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
-        <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요.</p>
+        <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요. 캘린더 파일(.ics) 내용을 붙여넣어도 읽어요.</p>
         <textarea id="paste-${f.id}" style="min-height:160px" placeholder="MATH 137 | MWF | 10:30-11:20 | MC 2065&#10;CS 135 | TTh | 1:00PM-2:20PM | DC 1350&#10;경제원론 | 화목 | 14:30-15:50 | HH 1101"></textarea>
-        <div class="actions" style="margin-top:0"><label class="btn photo">📷 사진에서 글씨 읽기<input type="file" accept="image/*" data-photo="${f.id}" hidden></label></div>
+        <div class="actions" style="margin-top:0"><label class="btn photo">📷 사진에서 글씨 읽기<input type="file" accept="image/*" data-photo="${f.id}" hidden></label><label class="btn photo">📅 캘린더 파일(.ics)<input type="file" accept=".ics,text/calendar" data-ics="${f.id}" hidden></label></div>
         <details class="help"><summary>어떤 형식을 읽을 수 있나요?</summary><pre>• Quest 시간표 복사본 (과목 줄 + "MWF 10:30AM - 11:20AM   MC 2065" 같은 줄)
 • 과목 | 요일 | 시작-끝 | 장소
 • 요일: M T W Th F (R도 목요일) 또는 월화수목금
@@ -796,6 +972,7 @@ function friendCard(f){
         <div class="actions"><button class="btn primary" data-parse="${f.id}">시간표 읽기</button><button class="btn" data-parse-replace="${f.id}">기존 것 지우고 읽기</button></div>
         <p class="msg" id="msg-${f.id}"></p>
         ${classListHTML(f)}
+        ${exportHTML(f)}
         <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">${f.isMe?'내 시간표 삭제':'친구 삭제'}</button></div>
       </div>`;
     }
@@ -1293,6 +1470,10 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.icsdl){const file=icsFile(d.icsdl),a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);const m=document.getElementById('icsmsg-'+d.icsdl);if(m){m.className='msg ok';m.textContent='파일을 만들었어요. 열면 캘린더에 추가할 수 있어요.'}return}
+  if(d.icsshare){const file=icsFile(d.icsshare);if(navigator.canShare&&navigator.canShare({files:[file]}))navigator.share({files:[file],title:file.name}).catch(()=>{});
+    else{const m=document.getElementById('icsmsg-'+d.icsshare);if(m){m.className='msg err';m.textContent='이 기기에서는 공유가 안 돼서 "파일 받기"를 써주세요.'}}return}
   if(d.act==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render()});return}
   if(d.act==='login'){googleLogin();return}
   if(d.act==='logout'){googleLogout();return}
@@ -1371,6 +1552,7 @@ view.addEventListener('click',async e=>{
   if(d.parse||d.parseReplace){
     const id=d.parse||d.parseReplace, f=state.friends.find(x=>x.id===id);
     const txt=document.getElementById('paste-'+id).value;
+    if(/BEGIN:VCALENDAR/i.test(txt)){if(d.parseReplace)f.classes=[];importICSInto(id,txt);return}
     const got=parseTimetable(txt);
     if(!got.length){const m=document.getElementById('msg-'+id);m.className='msg err';m.textContent='수업을 하나도 찾지 못했어요. 요일과 “10:30-11:20” 같은 시간이 한 줄에 있는지 확인해 주세요.';return}
     f.classes=d.parseReplace?got:f.classes.concat(got); save(); render();
@@ -1393,6 +1575,7 @@ view.addEventListener('click',async e=>{
 view.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.photo&&t.files&&t.files[0]){readPhoto(t.dataset.photo,t.files[0]);t.value='';return}
+  if(t.dataset.ics&&t.files&&t.files[0]){const fid=t.dataset.ics;t.files[0].text().then(txt=>importICSInto(fid,txt));t.value='';return}
   if(t.dataset.name){const f=state.friends.find(x=>x.id===t.dataset.name),v=t.value.trim().slice(0,30);if(f.isMe||!f.code)f.name=v||f.name;else f.nick=v&&v!==f.name?v:undefined;save()}
   if(t.dataset.color){const f=state.friends.find(x=>x.id===t.dataset.color);f.color=t.value;save();render()}
 });
