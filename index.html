@@ -229,7 +229,20 @@ const meOf=()=>state.friends.find(f=>f.isMe);
 const others=()=>state.friends.filter(f=>!f.isMe);
 const label=f=>f.isMe?'나':f.name;
 
-function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}}
+function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}
+  if(fixMe()) try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
+/* keep exactly one "me": prefer the synced one, drop copies of the same person */
+function fixMe(){
+  const mes=state.friends.filter(f=>f.isMe); if(mes.length<2) return false;
+  const score=f=>(f.code&&f.secret?1000:0)+(f.code?100:0)+f.classes.length;
+  const main=mes.slice().sort((a,b)=>score(b)-score(a))[0];
+  const same=(a,b)=>(a.uid&&a.uid===b.uid)||(a.code&&a.code===b.code)||a.name===b.name||
+    JSON.stringify(a.classes.map(c=>[c.course,c.days,c.start]))===JSON.stringify(b.classes.map(c=>[c.course,c.days,c.start]));
+  state.friends=state.friends.filter(f=>!f.isMe||f===main||!same(f,main));
+  state.friends.forEach(f=>{if(f.isMe&&f!==main)f.isMe=false});
+  state.friends=[main,...state.friends.filter(f=>f!==main)];
+  return true;
+}
 function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function') schedulePublish()}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -517,11 +530,11 @@ function viewGrid(){
     const items=layoutDay(fs.flatMap(f=>classesOn(f,d).map(c=>({f,c,s:c.start,e:c.end}))));
     items.forEach(it=>{
       const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=blkInfo.push({f,c,d})-1;
-      const wide=dayMode&&it.n<=2;
+      const wide=dayMode&&it.n<=3;
       const words=esc(c.course).split(/\s+/).map(w=>`<span class="w">${w}</span>`).join('');
       const act=isActive(c,d);
       h+=`<button class="blk${!dayMode&&it.n>1?' narrow':''}${act?'':' off'}" data-blk="${idx}" style="top:${(c.start-lo)*PX+1}px;height:${ht}px;left:calc(${it.lane*w}% + 2px);width:calc(${w}% - 4px);--fc:${f.color}">
-        <b>${dayMode?esc(c.course):words}</b>${wide?`<span>${act?'':(c.off?'꺼둠 · ':'이번엔 안 감 · ')}${fmt(c.start)}–${fmt(c.end)}${c.loc?' · '+esc(c.loc):''}</span>${many?`<span class="bwho">${esc(label(f))}</span>`:''}`:''}</button>`;
+        <b>${dayMode?esc(c.course):words}</b>${wide?`<span>${act?'':(c.off?'꺼둠 · ':'안 감 · ')}${fmt(c.start)}–${fmt(c.end)}${c.loc&&it.n<=2?' · '+esc(c.loc):''}</span>${many?`<span class="bwho">${esc(label(f))}</span>`:''}`:''}</button>`;
     });
     if(d===r.day&&live&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
     h+='</div>';
@@ -918,6 +931,7 @@ view.addEventListener('click',async e=>{
   if(d.gday!==undefined){gridDay=+d.gday;render();return}
   if(d.blk!==undefined){const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(+d.blk);sh.hidden=false;return}
   if(d.act==='makeMe'){
+    if(meOf()){render();return}
     const name=(document.getElementById('me-name').value||'').trim()||'나';
     const me={id:uid(),uid:uid(),isMe:true,name,color:PALETTE[0],classes:[]};
     state.friends.unshift(me);openId=me.id;sel&&sel.add(me.id);save();render();return;
