@@ -6,6 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="어디야?">
 <meta name="theme-color" content="#4B5BFF">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>어디야? · 친구 시간표</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -165,6 +169,9 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .acct{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}
 .acct>div{flex:1;min-width:200px}
 .acct .msg{flex-basis:100%;margin:0}
+#netBadge{font-size:12px;font-weight:700;color:#fff;background:var(--busy);border-radius:999px;padding:3px 9px}
+.install{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;border:1.5px solid var(--accent)}
+.install>div{flex:1;min-width:200px}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
@@ -246,6 +253,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
       <input id="timeSel" type="time" aria-label="시간">
       <button id="liveBtn" class="live on" type="button">지금</button>
       <button id="refreshBtn" class="live" type="button" aria-label="새로고침" title="새로고침">⟳</button>
+      <span id="netBadge" hidden>오프라인</span>
     </div>
   </header>
 
@@ -261,7 +269,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0924-1';
+const APP_VER='0924-2';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -750,7 +758,7 @@ function viewFree(){
 }
 function viewManage(){
   const me=meOf();
-  let h=acctHTML()+`<h2 class="sec">내 시간표</h2>`;
+  let h=installHTML()+acctHTML()+`<h2 class="sec">내 시간표</h2>`;
   if(!me){
     h+=`<div class="panel mecta"><p>이름을 적고 내 시간표를 만들어요. 한 번만 입력해 두면 친구들한테 링크로 보낼 수 있어요.</p>
       <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div>
@@ -1246,6 +1254,28 @@ function acctHTML(){
     <button class="btn primary small" data-act="login">연결하기</button><p class="msg" id="acct-msg"></p></div>`;
 }
 
+
+/* ---------- installable app (PWA) ---------- */
+let installEvt=null;
+const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const ua=navigator.userAgent;
+const isIOS=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const inApp=/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(ua);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(tab==='manage'&&!typing())render()});
+window.addEventListener('appinstalled',()=>{installEvt=null;toast('📲 앱으로 설치됐어요! 홈 화면에서 열어주세요');render()});
+function installHTML(){
+  if(standalone()) return '';
+  if(inApp) return `<div class="panel install"><b>📲 앱으로 쓰려면</b><div class="sub">지금은 카톡 같은 앱 안에서 열려 있어요. 오른쪽 위 메뉴에서 <b>다른 브라우저로 열기</b>(아이폰은 사파리)를 누른 다음 설치해 주세요.</div></div>`;
+  if(installEvt) return `<div class="panel install"><div><b>📲 앱으로 설치하기</b><div class="sub">홈 화면에 아이콘이 생기고, 인터넷이 없어도 열려요.</div></div><button class="btn primary small" data-act="install">설치</button></div>`;
+  if(isIOS) return `<div class="panel install"><b>📲 앱으로 설치하기</b><div class="sub">사파리 아래쪽 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b>를 누르세요. 홈 화면 앱은 브라우저와 저장 공간이 따로라서, 설치한 다음에는 앱에서 친구를 추가해 주세요.</div></div>`;
+  return '';
+}
+function netBadge(){const b=document.getElementById('netBadge');if(b)b.hidden=navigator.onLine}
+window.addEventListener('online',netBadge);window.addEventListener('offline',netBadge);
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(e=>console.warn('sw',e)));
+}
+
 /* ---------- events ---------- */
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;editCls=null;render()}});
 const daySel=document.getElementById('daySel');
@@ -1263,6 +1293,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render()});return}
   if(d.act==='login'){googleLogin();return}
   if(d.act==='logout'){googleLogout();return}
   if(d.act==='syncNow'){const me=meOf();if(me)me.pubKey='';setSync('saving');await publishMe();refreshFriends(true);render();return}
@@ -1383,7 +1414,7 @@ document.getElementById('sheet').addEventListener('click',e=>{
   if(e.target.id==='sheet'||(t&&t.dataset.act==='sheetClose')){sh.hidden=true;return}
   if(t&&(t.dataset.skip!==undefined||t.dataset.offb!==undefined)) toggleBlk(t.dataset);
 });
-load(); render(); checkHash(); startSync();
+load(); render(); checkHash(); startSync(); netBadge();
 window.addEventListener('hashchange',()=>checkHash());
 setInterval(()=>{if(live&&tab!=='manage'&&!typing())render()},30000);
 </script>

@@ -1,0 +1,17 @@
+{
+  "name": "어디야? · 친구 시간표",
+  "short_name": "어디야?",
+  "description": "친구가 지금 어디 있는지, 언제 비는지 한눈에",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1328",
+  "theme_color": "#4B5BFF",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
