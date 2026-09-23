@@ -122,6 +122,40 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .sheet-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .sheet-acts .btn{flex:1}
 .offnote{color:var(--muted)}
+.clist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.crow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:var(--soft);border-radius:14px;padding:10px 12px}
+.crow-main{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 4px}
+.crow-sub{flex-basis:100%;font-size:13px}
+.crow-e{font-size:13px;color:var(--accent);font-weight:700;flex:none}
+.crow.offrow{opacity:.55}
+.crow.offrow b{text-decoration:line-through}
+.tag{font-size:11.5px;background:var(--line);border-radius:6px;padding:0 6px;color:var(--muted)}
+.addcls{margin-top:4px;align-self:flex-start}
+.ced{background:var(--soft);border:1.5px solid var(--accent);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.ced input,.ced select{border:none;background:var(--panel);border-radius:10px;padding:9px 10px;min-width:0}
+.ce-row{display:flex;gap:6px;align-items:center}
+.ce-row .ce-course{flex:1}
+.ce-row input[type=time]{flex:1}
+.ce-days{display:flex;gap:4px}
+.dchip{flex:1;border:none;background:var(--panel);border-radius:10px;padding:8px 0;font-weight:500;color:var(--muted)}
+.dchip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.fsync{padding:0 14px 10px;font-size:12.5px}
+.ce-rec{display:flex;flex-direction:column;gap:6px}
+.ce-lbl{font-size:13px;font-weight:700;color:var(--muted);margin-top:4px}
+.ce-rec .seg{margin-bottom:0;background:var(--panel);flex-wrap:wrap}
+.ce-rec .seg button{padding:6px 10px}
+.rep-b,.rep-s{display:none}
+.ced[data-rep="b"] .rep-b,.ced[data-rep="s"] .rep-s{display:block}
+.wchips{display:flex;flex-wrap:wrap;gap:4px}
+.wchip{flex:0 0 calc(20% - 4px);font-size:12.5px;padding:7px 0}
+.wchip.now{outline:1.5px solid var(--accent);outline-offset:-1.5px}
+.weeknav{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.weeknav>span{flex:1;text-align:center}
+.weeknav button{border:none;background:var(--soft);border-radius:10px;width:36px;height:32px;font-size:20px;line-height:1}
+.weeknav .wk0{width:auto;padding:0 10px;font-size:13px}
+.daytabs small,.gh small{display:block;font-size:10.5px;font-weight:400;opacity:.75}
+.ver{text-align:center;margin:18px 0 0;font-size:12px}
+#sync-msg .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
 details.backup summary::after{content:" ▾";color:var(--muted)}
@@ -219,6 +253,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
+const APP_VER='0923-6';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -306,13 +341,62 @@ function parseTimetable(text){
 
 /* ---------- status ---------- */
 function classesOn(f,day){return f.classes.filter(c=>c.days.includes(day)).sort((a,b)=>a.start-b.start)}
-function dateKey(day){const t=new Date(),m=new Date(t.getFullYear(),t.getMonth(),t.getDate()-((t.getDay()+6)%7)+day);
-  return ''+m.getFullYear()+String(m.getMonth()+1).padStart(2,'0')+String(m.getDate()).padStart(2,'0')}
+const pad2=n=>String(n).padStart(2,'0');
+function dateOf(day,off=0){const t=new Date();return new Date(t.getFullYear(),t.getMonth(),t.getDate()-((t.getDay()+6)%7)+day+off*7)}
+const keyOfDate=m=>''+m.getFullYear()+pad2(m.getMonth()+1)+pad2(m.getDate());
+function dateKey(day,off=0){return keyOfDate(dateOf(day,off))}
 const todayKey=()=>dateKey((new Date().getDay()+6)%7);
-function isActive(c,day){return !c.off&&!(c.skip&&c.skip===dateKey(day))}
-function activeOn(f,day){return classesOn(f,day).filter(c=>isActive(c,day))}
-const flagsOf=c=>(c.off?'o':'')+(c.skip&&c.skip>=todayKey()?'s'+c.skip:'');
-function applyFlags(c,fl){fl=String(fl||'');if(fl.includes('o'))c.off=true;const m=fl.match(/s(\d{8})/);if(m)c.skip=m[1];return c}
+const keyUTC=k=>Date.UTC(+k.slice(0,4),+k.slice(4,6)-1,+k.slice(6,8));
+const EPOCH=Date.UTC(1970,0,5);
+const k36=k=>Math.round((keyUTC(k)-EPOCH)/864e5).toString(36);
+const from36=v=>{const d=new Date(EPOCH+parseInt(v,36)*864e5);return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate())};
+const md=k=>(+k.slice(4,6))+'/'+(+k.slice(6,8));
+function occurs(c,day,off=0){
+  const dk=dateKey(day,off),wk=dateKey(0,off);
+  if(c.from&&dk<c.from) return false;
+  if(c.to&&dk>c.to) return false;
+  if(c.rep==='b'&&c.anchor) return Math.round((keyUTC(wk)-keyUTC(c.anchor))/(7*864e5))%2===0;
+  if(c.rep==='s') return (c.weeks||[]).includes(wk);
+  return true;
+}
+function isActive(c,day,off=0){return occurs(c,day,off)&&!c.off&&!(c.skip&&c.skip===dateKey(day,off))}
+function activeOn(f,day,off=0){return classesOn(f,day).filter(c=>isActive(c,day,off))}
+function flagsOf(c){
+  const t=[];
+  if(c.off) t.push('o');
+  if(c.skip&&c.skip>=todayKey()) t.push('s'+c.skip);
+  if(c.rep==='b'&&c.anchor) t.push('b'+k36(c.anchor));
+  if(c.rep==='s'&&c.weeks&&c.weeks.length) t.push('w'+c.weeks.map(k36).join(','));
+  if(c.from) t.push('f'+k36(c.from));
+  if(c.to) t.push('t'+k36(c.to));
+  return t.join('.');
+}
+function applyFlags(c,fl){
+  String(fl||'').split('.').forEach(tk=>{
+    if(!tk) return;
+    const old=tk.match(/^(o?)s(\d{8})$/);
+    if(tk==='o') c.off=true;
+    else if(old){if(old[1])c.off=true;c.skip=old[2]}
+    else if(tk[0]==='b'){c.rep='b';c.anchor=from36(tk.slice(1))}
+    else if(tk[0]==='w'){c.rep='s';c.weeks=tk.slice(1).split(',').filter(Boolean).map(from36)}
+    else if(tk[0]==='f') c.from=from36(tk.slice(1));
+    else if(tk[0]==='t') c.to=from36(tk.slice(1));
+  });
+  return c;
+}
+function repText(c){
+  const t=[];
+  if(c.rep==='b') t.push('격주');
+  if(c.rep==='s') t.push('특정 주 '+(c.weeks||[]).length+'번');
+  if(c.from||c.to) t.push((c.from?md(c.from):'')+'~'+(c.to?md(c.to):''));
+  return t.join(' · ');
+}
+let weekOff=0;
+function weekNavHTML(){
+  const a=dateOf(0,weekOff),b=dateOf(6,weekOff);
+  const lbl=weekOff===0?'이번 주':weekOff===1?'다음 주':weekOff===-1?'지난 주':(weekOff>0?weekOff+'주 뒤':(-weekOff)+'주 전');
+  return `<div class="weeknav"><button data-wk="-1" aria-label="이전 주">‹</button><span><b>${lbl}</b> <span class="sub">${a.getMonth()+1}/${a.getDate()}–${b.getMonth()+1}/${b.getDate()}</span></span><button data-wk="1" aria-label="다음 주">›</button>${weekOff?'<button data-wk="0" class="wk0">오늘</button>':''}</div>`;
+}
 function statusOf(f,r){
   const today=activeOn(f,r.day);
   const cur=today.find(c=>c.start<=r.min&&r.min<c.end);
@@ -328,8 +412,8 @@ function statusOf(f,r){
 }
 
 /* ---------- free slots ---------- */
-function freeSlots(friends,day){
-  const busy=friends.flatMap(f=>activeOn(f,day).map(c=>[c.start,c.end])).sort((a,b)=>a[0]-b[0]);
+function freeSlots(friends,day,off=0){
+  const busy=friends.flatMap(f=>activeOn(f,day,off).map(c=>[c.start,c.end])).sort((a,b)=>a[0]-b[0]);
   const slots=[];let t=START;
   for(const [s,e] of busy){ if(s>t) slots.push([t,Math.min(s,END)]); t=Math.max(t,e); if(t>=END)break; }
   if(t<END) slots.push([t,END]);
@@ -347,6 +431,76 @@ function chipsHTML(onlyWith){
     `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot"></span>${esc(label(f))}</button>`).join('')+'</div>';
 }
 
+
+
+function ago(t){const s=Math.round((Date.now()-t)/1000);return s<60?'방금':s<3600?Math.floor(s/60)+'분 전':s<86400?Math.floor(s/3600)+'시간 전':Math.floor(s/86400)+'일 전'}
+/* ---------- class list + editor ---------- */
+let editCls=null;
+const TYPES=['LEC','TUT','LAB','SEM','TST'];
+function classListHTML(f){
+  const list=f.classes.slice().sort((a,b)=>(a.days[0]??9)-(b.days[0]??9)||a.start-b.start);
+  let h='<div class="clist">';
+  list.forEach(c=>{
+    h+=editCls===f.id+':'+c.id?classEditor(f,c):
+    `<button class="crow${c.off?' offrow':''}" data-cedit="${f.id}:${c.id}">
+      <span class="crow-main"><b>${esc(c.course)}</b>${c.type?` <span class="sub">${esc(c.type)}</span>`:''}${c.off?' <span class="tag">꺼둠</span>':''}
+      <span class="sub crow-sub">${c.days.map(d=>DAYS[d]).join('')} · ${fmt(c.start)}–${fmt(c.end)}${c.loc?' · '+esc(c.loc):''}${repText(c)?' · 🔁 '+repText(c):''}</span></span>
+      <span class="crow-e">편집</span></button>`;
+  });
+  h+=editCls===f.id+':new'?classEditor(f,null):`<button class="btn addcls" data-cedit="${f.id}:new">＋ 수업 직접 추가</button>`;
+  return h+'</div>';
+}
+function classEditor(f,c){
+  const key=f.id+':'+(c?c.id:'new'),days=c?c.days:[],ty=c?c.type:'LEC';
+  return `<div class="ced" data-ced="${key}" data-rep="${c&&c.rep||'w'}">
+    <div class="ce-row"><input class="ce-course" value="${c?esc(c.course):''}" placeholder="과목 (예: MATH 137)">
+      <select class="ce-type">${TYPES.map(t=>`<option ${t===ty?'selected':''}>${t}</option>`).join('')}<option value="" ${ty&&!TYPES.includes(ty)?'':(!ty?'selected':'')}>기타</option></select></div>
+    <div class="ce-days">${DAYS.map((d,i)=>`<button type="button" class="dchip" data-dchip="${i}" aria-pressed="${days.includes(i)}">${d}</button>`).join('')}</div>
+    <div class="ce-row"><input type="time" class="ce-start" value="${c?fmt(c.start):''}" aria-label="시작"><span class="sub">–</span><input type="time" class="ce-end" value="${c?fmt(c.end):''}" aria-label="끝"></div>
+    <input class="ce-loc" value="${c?esc(c.loc):''}" placeholder="장소 (예: MC 2065)">
+    ${recurHTML(c)}
+    <p class="msg ce-msg"></p>
+    <div class="actions" style="margin-bottom:0">
+      <button class="btn primary" data-cesave="${key}">${c?'저장':'추가'}</button>
+      ${c?`<button class="btn" data-offc="${key}">${c.off?'다시 켜기':'끄기'}</button><button class="btn danger" data-delc="${key}">삭제</button>`:''}
+      <button class="linkbtn" data-cecancel="1">취소</button></div></div>`;
+}
+function recurHTML(c){
+  const rep=c&&c.rep||'w',w0=dateKey(0,0),w1=dateKey(0,1);
+  const anchorThis=!c||!c.anchor||Math.round((keyUTC(w0)-keyUTC(c.anchor))/(7*864e5))%2===0;
+  const sel=new Set(c&&c.weeks||[]);
+  const weeks=[];for(let i=-1;i<16;i++)weeks.push(dateKey(0,i));
+  (c&&c.weeks||[]).forEach(k=>{if(!weeks.includes(k))weeks.push(k)});weeks.sort();
+  const iso=k=>k?k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8):'';
+  return `<div class="ce-rec">
+    <label class="ce-lbl">반복</label>
+    <div class="seg ce-repseg">${[['w','매주'],['b','격주'],['s','특정 주만']].map(([v,t])=>`<button type="button" data-rep="${v}" aria-pressed="${rep===v}">${t}</button>`).join('')}</div>
+    <div class="rep-b"><div class="seg">${[[true,'이번 주('+md(w0)+')부터'],[false,'다음 주('+md(w1)+')부터']].map(([v,t])=>`<button type="button" data-anc="${v?0:1}" aria-pressed="${anchorThis===v}">${t}</button>`).join('')}</div></div>
+    <div class="rep-s"><p class="sub" style="margin:0 0 6px">수업 있는 주를 눌러서 골라요 (월요일 날짜 기준)</p>
+      <div class="wchips">${weeks.map(k=>`<button type="button" class="dchip wchip${k===w0?' now':''}" data-wchip="${k}" aria-pressed="${sel.has(k)}">${md(k)}</button>`).join('')}</div></div>
+    <label class="ce-lbl">기간 <span class="sub">(선택 · 비워두면 계속)</span></label>
+    <div class="ce-row"><input type="date" class="ce-from" value="${iso(c&&c.from)}" aria-label="시작일"><span class="sub">~</span><input type="date" class="ce-to" value="${iso(c&&c.to)}" aria-label="종료일"></div>
+  </div>`;
+}
+const hm=v=>{const m=String(v).match(/^(\d{1,2}):(\d{2})/);return m?+m[1]*60+ +m[2]:null};
+function saveClass(key,box){
+  const [fid,cid]=key.split(':'),f=state.friends.find(x=>x.id===fid),msg=box.querySelector('.ce-msg');
+  const course=box.querySelector('.ce-course').value.trim()||'수업',type=box.querySelector('.ce-type').value;
+  const days=[...box.querySelectorAll('.dchip[aria-pressed="true"]')].map(b=>+b.dataset.dchip).sort((a,b)=>a-b);
+  const start=hm(box.querySelector('.ce-start').value),end=hm(box.querySelector('.ce-end').value),loc=box.querySelector('.ce-loc').value.trim();
+  const err=t=>{msg.className='msg err ce-msg';msg.textContent=t};
+  if(!days.length) return err('요일을 하나 이상 골라주세요.');
+  if(start==null||end==null) return err('시작 시간과 끝 시간을 넣어주세요.');
+  if(end<=start) return err('끝 시간이 시작 시간보다 늦어야 해요.');
+  const rep=box.dataset.rep||'w',undash=v=>v?v.replace(/-/g,''):undefined;
+  const rec={rep:rep==='w'?undefined:rep,anchor:undefined,weeks:undefined,from:undash(box.querySelector('.ce-from').value),to:undash(box.querySelector('.ce-to').value)};
+  if(rep==='b'){const a=box.querySelector('[data-anc][aria-pressed="true"]');rec.anchor=dateKey(0,a&&a.dataset.anc==='1'?1:0)}
+  if(rep==='s'){rec.weeks=[...box.querySelectorAll('.wchip[aria-pressed="true"]')].map(b=>b.dataset.wchip).sort();if(!rec.weeks.length)return err('수업 있는 주를 하나 이상 골라주세요.')}
+  if(rec.from&&rec.to&&rec.to<rec.from) return err('기간의 끝 날짜가 시작 날짜보다 늦어야 해요.');
+  if(cid==='new') f.classes.push(Object.assign({id:uid(),course,type,days,start,end,loc},rec));
+  else Object.assign(f.classes.find(x=>x.id===cid),{course,type,days,start,end,loc},rec);
+  editCls=null;save();render();
+}
 
 /* ---------- backup ---------- */
 function backupHTML(){
@@ -443,9 +597,9 @@ function addPerson(p){
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
   if(me&&p.code&&me.code===p.code) return {kind:'me'};
   const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
-  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();return{kind:'updated',f:ex}}
+  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();if(p.code)watchFriends();return{kind:'updated',f:ex}}
   p.color=PALETTE[state.friends.length%PALETTE.length];
-  state.friends.push(p);sel&&sel.add(p.id);save();return{kind:'added',f:p};
+  state.friends.push(p);sel&&sel.add(p.id);save();if(p.code)watchFriends();return{kind:'added',f:p};
 }
 function pendingHTML(){
   if(!pending) return '';
@@ -486,6 +640,12 @@ function viewNow(){
       sub=s.next?`다음: ${esc(s.next.course)} · ${esc(s.next.loc||'강의실 미정')} · ${fmt(s.next.start)}`:'';
       if(!s.noclass&&!s.done) sub=`${dur(s.freeUntil-r.min)} 남음`+(sub?' · '+sub:'');
       badge=`<span class="badge free">비어있음</span>`;
+      const skipped=classesOn(f,r.day).find(c=>occurs(c,r.day)&&!isActive(c,r.day)&&c.start<=r.min&&r.min<c.end);
+      if(skipped){
+        where='수업 안 가요 😴';
+        sub=`${esc(skipped.course)}${skipped.type?' '+skipped.type:''} ${skipped.off?'꺼둠':'오늘 빠짐'} · ${fmt(skipped.start)}–${fmt(skipped.end)}`+(s.next?` · 다음: ${esc(s.next.course)} ${fmt(s.next.start)}`:'');
+        badge=`<span class="badge free">비어있음</span>`;
+      }
     }
     return {s,html:`<div class="row" style="--fc:${f.color}"><span class="avatar">${esc([...f.name][0]||'?')}</span>
       <div><div class="who">${esc(f.name)}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
@@ -518,25 +678,27 @@ function viewGrid(){
   const many=fs.length>1;
   blkInfo=[];
   let h=`<div class="gtop">${chipsHTML(true)}<div class="seg"><button data-gmode="day" aria-pressed="${dayMode}">하루</button><button data-gmode="week" aria-pressed="${!dayMode}">주간</button></div></div>`;
-  if(dayMode) h+=`<div class="daytabs">${days.map(d=>`<button data-gday="${d}" aria-pressed="${d===gridDay}">${DAYS[d]}${live&&d===r.day?'<i></i>':''}</button>`).join('')}</div>`;
+  const thisWk=weekOff===0;
+  h+=weekNavHTML();
+  if(dayMode) h+=`<div class="daytabs">${days.map(d=>`<button data-gday="${d}" aria-pressed="${d===gridDay}">${DAYS[d]}<small>${dateOf(d,weekOff).getDate()}</small>${thisWk&&d===(new Date().getDay()+6)%7?'<i></i>':''}</button>`).join('')}</div>`;
   h+=`<div class="grid ${dayMode?'dayv':'weekv'}" style="grid-template-columns:34px repeat(${shown.length},1fr)"><div></div>`;
-  shown.forEach(d=>h+=dayMode?'<div></div>':`<div class="gh ${live&&d===r.day?'today':''}"><span>${DAYS[d]}</span></div>`);
+  shown.forEach(d=>h+=dayMode?'<div></div>':`<div class="gh ${thisWk&&d===(new Date().getDay()+6)%7?'today':''}"><span>${DAYS[d]}</span><small>${dateOf(d,weekOff).getDate()}</small></div>`);
   h+=`<div class="tcol" style="height:${H}px">`;
   for(let t=lo;t<=hi;t+=60) h+=`<span style="top:${(t-lo)*PX}px">${t/60}</span>`;
   h+='</div>';
   shown.forEach(d=>{
     h+=`<div class="dcol" style="height:${H}px">`;
     for(let t=lo+60;t<hi;t+=60) h+=`<div class="hline" style="top:${(t-lo)*PX}px"></div>`;
-    const items=layoutDay(fs.flatMap(f=>classesOn(f,d).map(c=>({f,c,s:c.start,e:c.end}))));
+    const items=layoutDay(fs.flatMap(f=>classesOn(f,d).filter(c=>occurs(c,d,weekOff)).map(c=>({f,c,s:c.start,e:c.end}))));
     items.forEach(it=>{
-      const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=blkInfo.push({f,c,d})-1;
+      const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=blkInfo.push({f,c,d,off:weekOff})-1;
       const wide=dayMode&&it.n<=3;
       const words=esc(c.course).split(/\s+/).map(w=>`<span class="w">${w}</span>`).join('');
-      const act=isActive(c,d);
+      const act=isActive(c,d,weekOff);
       h+=`<button class="blk${!dayMode&&it.n>1?' narrow':''}${act?'':' off'}" data-blk="${idx}" style="top:${(c.start-lo)*PX+1}px;height:${ht}px;left:calc(${it.lane*w}% + 2px);width:calc(${w}% - 4px);--fc:${f.color}">
         <b>${dayMode?esc(c.course):words}</b>${wide?`<span>${act?'':(c.off?'꺼둠 · ':'안 감 · ')}${fmt(c.start)}–${fmt(c.end)}${c.loc&&it.n<=2?' · '+esc(c.loc):''}</span>${many?`<span class="bwho">${esc(label(f))}</span>`:''}`:''}</button>`;
     });
-    if(d===r.day&&live&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
+    if(thisWk&&d===r.day&&live&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
     h+='</div>';
   });
   h+='</div>';
@@ -551,9 +713,10 @@ function sheetHTML(i){
     <div class="sheet-title">${esc(c.course)} <small>${esc(c.type)}</small></div>
     <div class="sheet-row">🕘 ${c.days.map(x=>DAYS[x]).join('')} ${fmt(c.start)}–${fmt(c.end)}</div>
     <div class="sheet-row">📍 ${esc(c.loc||'강의실 미정')}</div>
-    ${!isActive(c,b.d)?`<div class="sheet-row offnote">${c.off?'🚫 꺼둔 수업이에요':'😴 이번 '+DAYS[b.d]+'요일엔 안 가요'}</div>`:''}
+    ${repText(c)?`<div class="sheet-row">🔁 ${repText(c)}</div>`:''}
+    ${!isActive(c,b.d,b.off)?`<div class="sheet-row offnote">${c.off?'🚫 꺼둔 수업이에요':'😴 '+md(dateKey(b.d,b.off))+'('+DAYS[b.d]+')엔 안 가요'}</div>`:''}
     ${f.isMe?`<div class="sheet-acts">
-      ${c.off?'':`<button class="btn ${c.skip===dateKey(b.d)?'primary':''}" data-skip="${i}">${c.skip===dateKey(b.d)?'다시 갈래요':(b.d===(new Date().getDay()+6)%7?'오늘만 안 가요':'이번 '+DAYS[b.d]+'요일만 안 가요')}</button>`}
+      ${c.off?'':`<button class="btn ${c.skip===dateKey(b.d,b.off)?'primary':''}" data-skip="${i}">${c.skip===dateKey(b.d,b.off)?'다시 갈래요':(dateKey(b.d,b.off)===todayKey()?'오늘만 안 가요':md(dateKey(b.d,b.off))+'('+DAYS[b.d]+')만 안 가요')}</button>`}
       <button class="btn ${c.off?'primary':''}" data-offb="${i}">${c.off?'수업 다시 켜기':'계속 끄기'}</button></div>
       <p class="sub" style="margin:8px 0 0">친구들 화면에도 자동으로 반영돼요.</p>`:''}
     <button class="btn" data-act="sheetClose" style="width:100%;margin-top:12px">닫기</button></div>`;
@@ -563,12 +726,12 @@ function viewFree(){
   let fs=selected(); const r=ref();
   const all=state.friends.flatMap(f=>f.classes);
   const days=[0,1,2,3,4].concat([5,6].filter(d=>all.some(c=>c.days.includes(d))));
-  let h=`<div class="panel">${chipsHTML(true)}<p class="hint">선택한 친구들이 모두 수업 없는 시간이에요 (${fmt(START)}–${fmt(END)}, ${MIN_FREE}분 이상).</p>`;
+  let h=`<div class="panel">${chipsHTML(true)}${weekNavHTML()}<p class="hint">선택한 친구들이 모두 수업 없는 시간이에요 (${fmt(START)}–${fmt(END)}, ${MIN_FREE}분 이상).</p>`;
   fs=fs.filter(f=>f.classes.length);
   if(!fs.length) return h+'<p class="none">위에서 친구를 한 명 이상 골라주세요.</p></div>';
   days.forEach(d=>{
-    const slots=freeSlots(fs,d);
-    h+=`<div class="day"><h3>${DAYS[d]}요일${live&&d===r.day?' (오늘)':''}</h3>`+
+    const slots=freeSlots(fs,d,weekOff);
+    h+=`<div class="day"><h3>${DAYS[d]}요일 <span class="sub">${md(dateKey(d,weekOff))}</span>${weekOff===0&&d===(new Date().getDay()+6)%7?' (오늘)':''}</h3>`+
       (slots.length?slots.map(([s,e])=>`<span class="slot">${fmt(s)}–${fmt(e)}<i>${dur(e-s)}</i></span>`).join(''):'<span class="none">같이 비는 시간이 없어요</span>')+'</div>';
   });
   return h+'</div>';
@@ -587,7 +750,7 @@ function viewManage(){
     <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="linkbtn" data-act="add">또는 직접 입력하기</button></div>
     <p class="msg" id="add-msg"></p></div>`;
   others().forEach(f=>h+=friendCard(f));
-  return h+backupHTML();
+  return h+backupHTML()+`<p class="ver sub">어디야? 버전 ${APP_VER} · 친구도 같은 버전이어야 모든 기능이 보여요</p>`;
 }
 function friendCard(f){
   let h='';
@@ -598,6 +761,7 @@ function friendCard(f){
       <input type="text" value="${esc(f.name)}" data-name="${f.id}" aria-label="이름">
       <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
+      ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?`☁️ 자동 업데이트 중${f.synced?' · '+ago(f.synced)+' 확인':''}`:'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
       ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
@@ -611,16 +775,7 @@ function friendCard(f){
 • 사진은 Quest 주간 시간표(초록 칸) 스크린샷이나 List View 스크린샷을 읽을 수 있어요. 읽은 글씨를 확인하고 고친 다음 "시간표 읽기"를 누르세요</pre></details>
         <div class="actions"><button class="btn primary" data-parse="${f.id}">시간표 읽기</button><button class="btn" data-parse-replace="${f.id}">기존 것 지우고 읽기</button></div>
         <p class="msg" id="msg-${f.id}"></p>
-        ${f.classes.length?`<div class="tablewrap"><table><tr><th>과목</th><th>요일</th><th>시간</th><th>장소</th><th></th></tr>`+
-          f.classes.slice().sort((a,b)=>a.days[0]-b.days[0]||a.start-b.start).map(c=>`<tr class="${c.off?'offrow':''}"><td>${esc(c.course)}${c.type?' <span class="sub">'+c.type+'</span>':''}</td><td>${c.days.map(d=>DAYS[d]).join('')}</td><td>${fmt(c.start)}–${fmt(c.end)}</td><td>${esc(c.loc)}</td><td style="text-align:right"><button class="btn small" data-offc="${f.id}:${c.id}">${c.off?'켜기':'끄기'}</button> <button class="btn small danger" data-delc="${f.id}:${c.id}" aria-label="삭제">삭제</button></td></tr>`).join('')+'</table></div>':''}
-        <div class="manual">
-          <input id="m-course-${f.id}" placeholder="과목">
-          <input id="m-days-${f.id}" placeholder="요일 (월수금)">
-          <input id="m-start-${f.id}" type="time" aria-label="시작">
-          <input id="m-end-${f.id}" type="time" aria-label="끝">
-          <input id="m-loc-${f.id}" placeholder="장소">
-          <button class="btn" data-manual="${f.id}">추가</button>
-        </div>
+        ${classListHTML(f)}
         <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">${f.isMe?'내 시간표 삭제':'친구 삭제'}</button></div>
       </div>`;
     }
@@ -839,7 +994,10 @@ function syncText(){
   if(!me||!me.classes.length) return '시간표를 먼저 입력하면 공유할 수 있어요';
   if(FB.status==='saving') return '☁️ 저장 중…';
   if(FB.status==='error') return '⚠️ 인터넷 연결이 안 돼서 아직 저장 못 했어요 (공유는 가능해요)';
-  if(me.code&&me.pubKey===pubKeyOf(me)) return '☁️ 자동 동기화 켜짐 · 시간표를 고치면 친구들한테도 바로 반영돼요';
+  if(me.code&&me.pubKey===pubKeyOf(me)){
+    const offs=me.classes.filter(c=>c.off||(c.skip&&c.skip>=todayKey())).length;
+    return `☁️ 친구들한테 반영됨${me.pubAt?' · '+ago(me.pubAt)+' 저장':''}${me.pubOk===false?' (확인 실패)':''}${offs?` · 끈 수업 ${offs}개도 친구 화면에 "안 감"으로 보여요`:''} <button class="linkbtn" data-act="syncNow">지금 동기화</button>`;
+  }
   return '☁️ 동기화 준비 중…';
 }
 let pubTimer=null,pubRunning=false;
@@ -870,7 +1028,9 @@ async function publishMe(){
         await b.commit();
       }
     }
-    me.pubKey=key;localSave();setSync('saved');
+    // read back to confirm what friends will actually receive
+    try{const back=await db.collection('people').doc(me.code).get({source:'server'});me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
+    me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
   }catch(e){console.warn('publish failed',e);setSync('error')}
   finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)) schedulePublish()}
 }
@@ -882,26 +1042,39 @@ async function fetchPerson(code){
   const d=snap.data(),p=unpackV2(d.data);
   p.name=d.name||p.name;p.code=code;return p;
 }
+const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
+function applyRemote(code,d){
+  const f=others().find(x=>x.code===code); if(!f||!d||!d.data) return;
+  let p; try{p=unpackV2(d.data)}catch(e){return}
+  p.name=d.name||p.name;
+  f.synced=Date.now();
+  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!editCls)render()}
+  else localSave();
+}
+/* realtime: listen to each ☁️ friend's document while the app is open */
+const subs={};
+function watchFriends(){
+  initFB().then(()=>{
+    const codes=new Set(others().filter(f=>f.code).map(f=>f.code));
+    Object.keys(subs).forEach(c=>{if(!codes.has(c)){subs[c]();delete subs[c]}});
+    codes.forEach(code=>{
+      if(subs[code]) return;
+      subs[code]=FB.db.collection('people').doc(code).onSnapshot(snap=>{if(snap.exists)applyRemote(code,snap.data())},()=>{delete subs[code]});
+    });
+  }).catch(()=>{});
+}
 let lastRefresh=0;
 async function refreshFriends(force){
-  if(!force&&Date.now()-lastRefresh<60000) return;
+  if(!force&&Date.now()-lastRefresh<30000) return;
   lastRefresh=Date.now();
-  const list=others().filter(f=>f.code); if(!list.length) return;
-  let changed=false;
-  await Promise.all(list.map(async f=>{
-    try{
-      const p=await fetchPerson(f.code); if(!p) return;
-      const before=JSON.stringify([f.name,f.classes.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
-      const after=JSON.stringify([p.name,p.classes.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
-      if(before!==after){f.name=p.name;f.classes=p.classes;changed=true}
-      f.synced=Date.now();
-    }catch(e){}
+  await Promise.all(others().filter(f=>f.code).map(async f=>{
+    try{await initFB();const snap=await FB.db.collection('people').doc(f.code).get();if(snap.exists)applyRemote(f.code,snap.data())}catch(e){}
   }));
-  if(changed){localSave();render()}
+  watchFriends();
 }
 function startSync(){
   initFB().then(()=>{
-    refreshFriends(true);
+    refreshFriends(true);watchFriends();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshFriends()});
@@ -924,8 +1097,17 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='syncNow'){const me=meOf();if(me)me.pubKey='';setSync('saving');await publishMe();refreshFriends(true);render();return}
   if(d.setme){const f=state.friends.find(x=>x.id===d.setme);f.isMe=true;f.uid=f.uid||uid();
     state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;save();render();return}
+  if(d.cedit){editCls=d.cedit;render();const el=document.querySelector(`[data-ced="${d.cedit}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.querySelector('.ce-course');if(d.cedit.endsWith(':new'))i.focus()}return}
+  if(d.wk!==undefined){weekOff=d.wk==='0'?0:weekOff+(+d.wk);render();return}
+  if(d.rep&&t.closest('.ced')){const box=t.closest('.ced');box.dataset.rep=d.rep;box.querySelectorAll('[data-rep]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
+  if(d.anc!==undefined){t.parentElement.querySelectorAll('[data-anc]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
+  if(d.wchip){t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')!=='true');return}
+  if(d.dchip!==undefined){t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')!=='true');return}
+  if(d.cesave){saveClass(d.cesave,t.closest('.ced'));return}
+  if(d.cecancel){editCls=null;render();return}
   if(d.offc){const [fid,cid]=d.offc.split(':');const c=state.friends.find(x=>x.id===fid).classes.find(x=>x.id===cid);c.off=!c.off;if(c.off)c.skip=undefined;save();render();return}
   if(d.gmode){gridMode=d.gmode;render();return}
   if(d.gday!==undefined){gridDay=+d.gday;render();return}
@@ -984,7 +1166,7 @@ view.addEventListener('click',async e=>{
   }
 
   if(d.chip){sel.has(d.chip)?sel.delete(d.chip):sel.add(d.chip);render();return}
-  if(d.toggle){openId=openId===d.toggle?null:d.toggle;render();return}
+  if(d.toggle){editCls=null;openId=openId===d.toggle?null:d.toggle;render();return}
   if(d.parse||d.parseReplace){
     const id=d.parse||d.parseReplace, f=state.friends.find(x=>x.id===id);
     const txt=document.getElementById('paste-'+id).value;
@@ -1002,7 +1184,7 @@ view.addEventListener('click',async e=>{
     if(en2<=s){m.className='msg err';m.textContent='끝 시간이 시작 시간보다 늦어야 해요.';return}
     f.classes.push({id:uid(),course:g('course')||'수업',type:'',days,start:s,end:en2,loc:g('loc')});save();render();return;
   }
-  if(d.delc){const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
+  if(d.delc){editCls=null;const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
   if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();return}
 });
 view.addEventListener('change',e=>{
@@ -1019,7 +1201,7 @@ function addFriend(){
 
 function toggleBlk(d){
   const b=blkInfo[+(d.skip!==undefined?d.skip:d.offb)]; if(!b) return;
-  if(d.skip!==undefined){const k=dateKey(b.d);b.c.skip=b.c.skip===k?undefined:k}
+  if(d.skip!==undefined){const k=dateKey(b.d,b.off);b.c.skip=b.c.skip===k?undefined:k}
   else {b.c.off=!b.c.off; if(b.c.off) b.c.skip=undefined}
   save();render();
   const i=blkInfo.findIndex(x=>x.c===b.c&&x.d===b.d),sh=document.getElementById('sheet');
