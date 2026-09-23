@@ -201,7 +201,8 @@ details.fold.addbox{margin-bottom:12px}
 .pname:hover,.pname:focus{border-color:var(--line);background:var(--soft)}
 .pbtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:4px 0}
 .profile .sharebar{justify-content:center;padding:6px 0 0;width:100%}
-.mebody{padding-top:14px}
+.mebody{padding-top:2px}
+.mycls{margin-top:14px}
 .tip{margin-bottom:12px}
 .crop-card{text-align:center}
 #cropcv{width:min(300px,76vw);height:auto;aspect-ratio:1;border-radius:18px;touch-action:none;cursor:grab;background:#000;display:block;margin:6px auto 10px}
@@ -310,7 +311,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0924-7';
+const APP_VER='0924-8';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -1023,7 +1024,8 @@ function viewMe(){
       ${others().some(f=>f.classes.length)?`<p class="hint" style="margin-top:6px">이미 친구 목록에 내 시간표를 넣어뒀다면, 눌러서 내 시간표로 바꾸세요.</p><div class="actions">${others().filter(f=>f.classes.length).map(f=>`<button class="btn small" data-setme="${f.id}"><span class="dot" style="background:${f.color}"></span> ${esc(f.name)}</button>`).join('')}</div>`:''}</div>`;
   }else{
     h+=profileHTML(me);
-    h+=`<h2 class="sec">내 수업</h2><div class="panel mebody">${cardBody(me)}</div>`;
+    const days=[...new Set(me.classes.flatMap(c=>c.days))].sort((a,b)=>a-b).map(d=>DAYS[d]).join('');
+    h+=`<details class="panel fold mycls" data-fold="mycls"${openAttr('mycls',!me.classes.length||!!editCls)}><summary><b>📚 내 수업</b> <span class="sub">${me.classes.length}개${days?' · '+days:''}</span></summary><div class="mebody">${cardBody(me)}</div></details>`;
   }
   h+=`<h2 class="sec">계정 · 백업</h2>`+acctHTML()+backupHTML();
   return h+`<p class="ver sub">어디야? 버전 ${APP_VER} · 친구도 같은 버전이어야 모든 기능이 보여요</p>`;
@@ -1615,7 +1617,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='syncNow'){const me=meOf();if(me)me.pubKey='';setSync('saving');await publishMe();refreshFriends(true);render();return}
   if(d.setme){const f=state.friends.find(x=>x.id===d.setme);f.isMe=true;f.uid=f.uid||uid();
     state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;tab='me';save();render();return}
-  if(d.cedit){editCls=d.cedit;render();const el=document.querySelector(`[data-ced="${d.cedit}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.querySelector('.ce-course');if(d.cedit.endsWith(':new'))i.focus()}return}
+  if(d.cedit){editCls=d.cedit;if(meOf()&&d.cedit.startsWith(meOf().id+':')){state.ui=state.ui||{};state.ui.mycls=true}render();const el=document.querySelector(`[data-ced="${d.cedit}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.querySelector('.ce-course');if(d.cedit.endsWith(':new'))i.focus()}return}
   if(d.wk!==undefined){weekOff=d.wk==='0'?0:weekOff+(+d.wk);render();return}
   if(d.rep&&t.closest('.ced')){const box=t.closest('.ced');box.dataset.rep=d.rep;box.querySelectorAll('[data-rep]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
   if(d.anc!==undefined){t.parentElement.querySelectorAll('[data-anc]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
@@ -1686,7 +1688,7 @@ view.addEventListener('click',async e=>{
   if(d.toggle){editCls=null;openId=openId===d.toggle?null:d.toggle;render();return}
   if(d.parse||d.parseReplace){
     const id=d.parse||d.parseReplace, f=state.friends.find(x=>x.id===id);
-    state.ui=state.ui||{};state.ui['imp-'+id]=true;
+    state.ui=state.ui||{};state.ui['imp-'+id]=true;if(f&&f.isMe)state.ui.mycls=true;
     const txt=document.getElementById('paste-'+id).value;
     if(/BEGIN:VCALENDAR/i.test(txt)){if(d.parseReplace)f.classes=[];importICSInto(id,txt);return}
     const got=parseTimetable(txt);
