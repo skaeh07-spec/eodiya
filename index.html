@@ -184,6 +184,9 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
   @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -219,7 +222,7 @@ const others=()=>state.friends.filter(f=>!f.isMe);
 const label=f=>f.isMe?'나':f.name;
 
 function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}}
-function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function') schedulePublish()}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -320,21 +323,21 @@ function chipsHTML(onlyWith){
 /* ---------- backup ---------- */
 function backupHTML(){
   return `<details class="panel backup"><summary>백업 · 복원</summary>
-  <p class="hint">친구 목록을 코드로 내보내요. 메모장에 저장해 두거나 친구한테 보내면, 다른 폰에서 "코드 불러오기"로 그대로 가져올 수 있어요.</p>
+  <p class="hint">친구 목록과 내 시간표 수정 권한을 코드로 내보내요. 폰을 바꾸거나 데이터가 지워졌을 때 이 코드로 복구해요. <b>친구한테는 보내지 말고 나만 보관하세요.</b></p>
   <div class="actions"><button class="btn primary" data-act="export" ${state.friends.length?'':'disabled'}>백업 코드 복사</button></div>
   <textarea id="bk-box" placeholder="여기에 백업 코드를 붙여넣으세요" style="min-height:80px"></textarea>
   <div class="actions"><button class="btn" data-act="importMerge">코드 불러와서 합치기</button><button class="btn danger" data-act="importReplace">지금 목록 지우고 불러오기</button></div>
   <p class="msg" id="bk-msg"></p></details>`;
 }
 function exportCode(){
-  const data=state.friends.map(f=>Object.assign(packPerson(f),f.isMe?{me:1}:{}));
+  const data=state.friends.map(f=>Object.assign(packPerson(f),f.isMe?{me:1,sc:f.secret||'',pk:f.pubKey||''}:{},f.code?{cd:f.code}:{}));
   return 'EODIYA1:'+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
 }
 function importCode(code){
   const raw=code.trim().replace(/^EODIYA1:/,'').replace(/\s+/g,'');
   const data=JSON.parse(decodeURIComponent(escape(atob(raw))));
   if(!Array.isArray(data)) throw new Error('bad');
-  return data.map(o=>Object.assign(unpackPerson(o),o.me?{isMe:true}:{}));
+  return data.map(o=>Object.assign(unpackPerson(o),o.me?{isMe:true,secret:o.sc||undefined}:{},o.cd?{code:o.cd}:{}));
 }
 
 
@@ -381,6 +384,8 @@ async function shareLink(){
 }
 async function personFromText(text){
   text=String(text);
+  const mc=text.match(/#c=([a-z0-9]{8,12})\b/);
+  if(mc) return await fetchPerson(mc[1]);
   const m2=text.match(/#a=([zp][A-Za-z0-9_-]+)/);
   if(m2) return unpackV2(await decodeShare(m2[1]));
   const m=text.match(/#add=([A-Za-z0-9_-]+)/);
@@ -390,23 +395,24 @@ async function personFromText(text){
 function addPerson(p){
   const me=meOf();
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
-  const ex=p.uid&&others().find(f=>f.uid===p.uid);
-  if(ex){ex.name=p.name;ex.classes=p.classes;save();return{kind:'updated',f:ex}}
+  if(me&&p.code&&me.code===p.code) return {kind:'me'};
+  const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
+  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();return{kind:'updated',f:ex}}
   p.color=PALETTE[state.friends.length%PALETTE.length];
   state.friends.push(p);sel&&sel.add(p.id);save();return{kind:'added',f:p};
 }
 function pendingHTML(){
   if(!pending) return '';
   const me=meOf();
-  if(me&&pending.uid===me.uid) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
-  const ex=pending.uid&&others().find(f=>f.uid===pending.uid);
+  if(me&&(pending.uid===me.uid||(pending.code&&pending.code===me.code))) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
+  const ex=others().find(f=>(pending.uid&&f.uid===pending.uid)||(pending.code&&f.code===pending.code));
   return `<div class="panel invite"><div class="big">👋</div>
     <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':'친구로 추가할까요?'}</p>
     <div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendYes">${ex?'업데이트':'추가하기'}</button><button class="btn" data-act="pendNo">취소</button></div>
     <p class="sub">홈 화면에 추가한 앱을 쓰고 있다면, 받은 메시지를 복사해서 앱의 친구 관리 → "친구 추가"에 붙여넣어 주세요. 브라우저와 앱은 저장 공간이 따로예요.</p></div>`;
 }
 async function checkHash(){
-  if(!/^#a(dd)?=/.test(location.hash)) return;
+  if(!/^#(a|add|c)=/.test(location.hash)) return;
   const h=location.hash;
   history.replaceState(null,'',location.pathname+location.search);
   try{pending=await personFromText(h)}catch(e){pending=null}
@@ -538,9 +544,9 @@ function friendCard(f){
     h+=`<div class="friend" style="--fc:${f.color}"><div class="fhead">
       <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
       <input type="text" value="${esc(f.name)}" data-name="${f.id}" aria-label="이름">
-      <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${f.classes.length}개 수업</span>
+      <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
-      ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg">${f.classes.length?'카톡으로 링크를 보내면 친구가 눌러서 바로 추가해요':'시간표를 먼저 입력하면 공유할 수 있어요'}</span></div>`:''}`;
+      ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
         <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요.</p>
@@ -741,6 +747,114 @@ function armed2(btn,key,text){
   setTimeout(()=>{if(btn.isConnected&&btn.classList.contains('armed')){btn.textContent=orig;btn.classList.remove('armed')}},4000);
   return false;
 }
+
+/* ---------- cloud sync (Firebase) ---------- */
+const FB_CONFIG={
+  apiKey:"AIzaSyD-vTj0Mqm72aAVA4w4iF122csY7az_9zU",
+  authDomain:"eodiya-fd5ce.firebaseapp.com",
+  projectId:"eodiya-fd5ce",
+  storageBucket:"eodiya-fd5ce.firebasestorage.app",
+  messagingSenderId:"858572998764",
+  appId:"1:858572998764:web:cee39bf6625e0792897049"
+};
+const FB={db:null,auth:null,ready:null,status:'off'}; // status: off|saving|saved|error
+function rand(n){const a='abcdefghijkmnpqrstuvwxyz23456789',b=new Uint32Array(n);crypto.getRandomValues(b);return [...b].map(x=>a[x%a.length]).join('')}
+function initFB(){
+  if(FB.ready) return FB.ready;
+  FB.ready=new Promise((res,rej)=>{
+    const go=()=>{
+      try{
+        if(!window.firebase) throw new Error('sdk');
+        if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+        FB.db=firebase.firestore();FB.auth=firebase.auth();res(true);
+      }catch(e){rej(e)}
+    };
+    if(window.firebase) go(); else window.addEventListener('load',go,{once:true});
+  });
+  FB.ready.catch(()=>{});
+  return FB.ready;
+}
+async function fbUser(){
+  await initFB();
+  const u=FB.auth.currentUser||await new Promise(r=>{const off=FB.auth.onAuthStateChanged(x=>{off();r(x)})});
+  return u||(await FB.auth.signInAnonymously()).user;
+}
+const pubKeyOf=me=>packV2(me);
+function setSync(st){FB.status=st;const el=document.getElementById('sync-msg');if(el)el.innerHTML=syncText()}
+function syncText(){
+  const me=meOf();
+  if(!me||!me.classes.length) return '시간표를 먼저 입력하면 공유할 수 있어요';
+  if(FB.status==='saving') return '☁️ 저장 중…';
+  if(FB.status==='error') return '⚠️ 인터넷 연결이 안 돼서 아직 저장 못 했어요 (공유는 가능해요)';
+  if(me.code&&me.pubKey===pubKeyOf(me)) return '☁️ 자동 동기화 켜짐 · 시간표를 고치면 친구들한테도 바로 반영돼요';
+  return '☁️ 동기화 준비 중…';
+}
+let pubTimer=null,pubRunning=false;
+function schedulePublish(){
+  const me=meOf(); if(!me||!me.classes.length) return;
+  if(me.pubKey===pubKeyOf(me)&&me.code) return;
+  clearTimeout(pubTimer);pubTimer=setTimeout(publishMe,1200);
+}
+async function publishMe(){
+  const me=meOf(); if(!me||!me.classes.length||pubRunning) return;
+  pubRunning=true;setSync('saving');
+  try{
+    const user=await fbUser(),db=FB.db,key=pubKeyOf(me);
+    const doc={owner:user.uid,name:me.name.slice(0,30)||'나',color:me.color,data:key,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+    if(!me.code){
+      const code=rand(10),secret=rand(28),b=db.batch();
+      b.set(db.collection('people').doc(code),doc);
+      b.set(db.collection('secrets').doc(code),{s:secret});
+      await b.commit();
+      me.code=code;me.secret=secret;
+    }else{
+      try{ await db.collection('people').doc(me.code).set(doc); }
+      catch(e){
+        if(e.code!=='permission-denied'||!me.secret) throw e;
+        const b=db.batch(); // reclaim after the anonymous account changed (e.g. restored from backup)
+        b.set(db.collection('claims').doc(me.code+'_'+user.uid),{s:me.secret});
+        b.set(db.collection('people').doc(me.code),doc);
+        await b.commit();
+      }
+    }
+    me.pubKey=key;localSave();setSync('saved');
+  }catch(e){console.warn('publish failed',e);setSync('error')}
+  finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)) schedulePublish()}
+}
+function localSave(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
+async function fetchPerson(code){
+  await initFB();
+  const snap=await FB.db.collection('people').doc(code).get();
+  if(!snap.exists) return null;
+  const d=snap.data(),p=unpackV2(d.data);
+  p.name=d.name||p.name;p.code=code;return p;
+}
+let lastRefresh=0;
+async function refreshFriends(force){
+  if(!force&&Date.now()-lastRefresh<60000) return;
+  lastRefresh=Date.now();
+  const list=others().filter(f=>f.code); if(!list.length) return;
+  let changed=false;
+  await Promise.all(list.map(async f=>{
+    try{
+      const p=await fetchPerson(f.code); if(!p) return;
+      const before=JSON.stringify([f.name,f.classes.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc])]);
+      const after=JSON.stringify([p.name,p.classes.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc])]);
+      if(before!==after){f.name=p.name;f.classes=p.classes;changed=true}
+      f.synced=Date.now();
+    }catch(e){}
+  }));
+  if(changed){localSave();render()}
+}
+function startSync(){
+  initFB().then(()=>{
+    refreshFriends(true);
+    const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
+  }).catch(()=>setSync('error'));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshFriends()});
+  setInterval(()=>{if(document.visibilityState==='visible')refreshFriends()},5*60000);
+}
+
 /* ---------- events ---------- */
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;render()}});
 const daySel=document.getElementById('daySel');
@@ -768,7 +882,9 @@ view.addEventListener('click',async e=>{
     state.friends.unshift(me);openId=me.id;sel&&sel.add(me.id);save();render();return;
   }
   if(d.act==='share'){
-    const me=meOf(),link=shareCache.key===packV2(me)?shareCache.link:await shareLink(),text=`${me.name}의 시간표 📍\n${link}`;
+    const me=meOf(),synced=me.code&&me.pubKey===pubKeyOf(me);
+    const link=synced?location.origin+location.pathname+'#c='+me.code:(shareCache.key===packV2(me)?shareCache.link:await shareLink());
+    const text=`${me.name}의 시간표 📍\n${link}`;
     const m=document.getElementById('share-msg');
     const copied=()=>{m.textContent='공유 메시지를 복사했어요. 카톡에 붙여넣어 보내세요.'};
     if(navigator.share){navigator.share({title:'어디야? 시간표',text}).catch(()=>{});return}
@@ -779,7 +895,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='addCode'){
     const m=document.getElementById('add-msg');
     let p=null;try{p=await personFromText(document.getElementById('add-box').value)}catch(e){}
-    if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지 전체(#add= 가 들어간 링크 포함)를 붙여넣어 주세요.';return}
+    if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지를 링크까지 통째로 붙여넣어 주세요. 인터넷 연결도 확인해 주세요.';return}
     const r=addPerson(p);render();
     const m2=document.getElementById('add-msg');m2.className='msg '+(r.kind==='me'?'err':'ok');
     m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!`;
@@ -842,7 +958,7 @@ function addFriend(){
 }
 
 document.getElementById('sheet').addEventListener('click',e=>{if(e.target.id==='sheet'||e.target.closest('[data-act=sheetClose]'))e.currentTarget.hidden=true});
-load(); render(); checkHash();
+load(); render(); checkHash(); startSync();
 window.addEventListener('hashchange',()=>checkHash());
 setInterval(()=>{if(live&&tab!=='manage')render()},30000);
 </script>
