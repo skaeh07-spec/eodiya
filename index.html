@@ -344,16 +344,33 @@ function backupHTML(){
   <div class="actions"><button class="btn" data-act="importMerge">코드 불러와서 합치기</button><button class="btn danger" data-act="importReplace">지금 목록 지우고 불러오기</button></div>
   <p class="msg" id="bk-msg"></p></details>`;
 }
-function exportCode(){
-  const data=state.friends.map(f=>Object.assign(packPerson(f),f.isMe?{me:1,sc:f.secret||'',pk:f.pubKey||''}:{},f.code?{cd:f.code}:{}));
-  return 'EODIYA1:'+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+async function exportCode(){
+  const items=state.friends.map(f=>{
+    if(f.isMe&&f.code&&f.secret) return 'm:'+f.code+':'+f.secret;
+    if(!f.isMe&&f.code) return 'c:'+f.code;
+    return (f.isMe?'P:':'p:')+packV2(f);
+  });
+  return 'E2'+await encodeShare(JSON.stringify(items));
 }
-function importCode(code){
-  const raw=code.trim().replace(/^EODIYA1:/,'').replace(/\s+/g,'');
-  const data=JSON.parse(decodeURIComponent(escape(atob(raw))));
-  if(!Array.isArray(data)) throw new Error('bad');
-  return data.map(o=>Object.assign(unpackPerson(o),o.me?{isMe:true,secret:o.sc||undefined}:{},o.cd?{code:o.cd}:{}));
+async function importCode(text){
+  text=String(text).trim();
+  if(/^EODIYA1:/.test(text)){
+    const data=JSON.parse(decodeURIComponent(escape(atob(text.replace(/^EODIYA1:/,'').replace(/\s+/g,'')))));
+    return data.map(o=>Object.assign(unpackPerson(o),o.me?{isMe:true,secret:o.sc||undefined}:{},o.cd?{code:o.cd}:{}));
+  }
+  const m=text.replace(/\s+/g,'').match(/E2([zp][A-Za-z0-9_-]+)/); if(!m) throw new Error('bad');
+  const items=JSON.parse(await decodeShare(m[1])),out=[];
+  for(const it of items){
+    const k=it[0],rest=it.slice(2);
+    if(k==='m'){const [code,secret]=rest.split(':');const p=await fetchPerson(code);if(p)out.push(Object.assign(p,{isMe:true,secret,code}))}
+    else if(k==='c'){const p=await fetchPerson(rest);if(p)out.push(p)}
+    else if(k==='p'||k==='P'){const p=unpackV2(rest);if(k==='P')p.isMe=true;out.push(p)}
+  }
+  out.forEach((p,i)=>{if(!p.isMe)p.color=PALETTE[(i+1)%PALETTE.length]});
+  return out;
 }
+let bkCache='';
+function prepBackup(){exportCode().then(c=>bkCache=c).catch(()=>{})}
 
 
 /* ---------- share one person ---------- */
@@ -382,8 +399,9 @@ const b64uToBytes=str=>{str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.le
 const streamBytes=(bytes,t)=>new Response(new Blob([bytes]).stream().pipeThrough(t)).arrayBuffer().then(b=>new Uint8Array(b));
 async function encodeShare(str){
   const raw=new TextEncoder().encode(str);
-  if(window.CompressionStream){try{return 'z'+bytesToB64u(await streamBytes(raw,new CompressionStream('deflate-raw')))}catch(e){}}
-  return 'p'+bytesToB64u(raw);
+  const plain='p'+bytesToB64u(raw);
+  if(window.CompressionStream){try{const z='z'+bytesToB64u(await streamBytes(raw,new CompressionStream('deflate-raw')));if(z.length<plain.length)return z}catch(e){}}
+  return plain;
 }
 async function decodeShare(code){
   const bytes=b64uToBytes(code.slice(1));
@@ -603,6 +621,7 @@ function render(){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
   const v=document.getElementById('view');
   if(meOf()&&meOf().classes.length) shareLink().catch(()=>{});
+  if(tab==='manage') prepBackup();
   v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage());
 }
 
@@ -926,7 +945,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='pendYes'){addPerson(pending);pending=null;tab='now';render();return}
   if(d.act==='pendNo'){pending=null;render();return}
   if(d.act==='export'){
-    const code=exportCode(),box=document.getElementById('bk-box'),m=document.getElementById('bk-msg');
+    const code=bkCache||await exportCode(),box=document.getElementById('bk-box'),m=document.getElementById('bk-msg');
     box.value=code;
     const done=()=>{m.className='msg ok';m.textContent='백업 코드를 복사했어요. 메모장이나 카톡에 붙여넣어 두세요.'};
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done,()=>{box.select();m.className='msg ok';m.textContent='아래 코드를 길게 눌러 복사하세요.'});
@@ -936,12 +955,17 @@ view.addEventListener('click',async e=>{
   if(d.act==='importMerge'||d.act==='importReplace'){
     const m=document.getElementById('bk-msg');
     try{
-      const got=importCode(document.getElementById('bk-box').value);
       if(d.act==='importReplace'&&!armed2(t,'imp','한 번 더 누르면 바꿔요')) return;
+      m.className='msg';m.textContent='불러오는 중…';
+      let got=await importCode(document.getElementById('bk-box').value);
+      if(d.act==='importMerge'){ // skip duplicates and a second "me"
+        const have=state.friends;got=got.filter(p=>!have.some(f=>(p.code&&f.code===p.code)||(p.uid&&f.uid===p.uid)));
+        if(meOf()) got.forEach(p=>{if(p.isMe)p.isMe=false});
+      }
       state.friends=d.act==='importReplace'?got:state.friends.concat(got);
       sel=null;save();render();
-      const m2=document.getElementById('bk-msg');m2.className='msg ok';m2.textContent=`친구 ${got.length}명을 불러왔어요.`;
-    }catch(err){m.className='msg err';m.textContent='코드를 읽지 못했어요. EODIYA1: 로 시작하는 코드 전체를 붙여넣었는지 확인해 주세요.'}
+      const m2=document.getElementById('bk-msg');m2.className='msg ok';m2.textContent=`${got.length}명을 불러왔어요.`;
+    }catch(err){console.warn(err);m.className='msg err';m.textContent='코드를 읽지 못했어요. 코드 전체를 붙여넣었는지, 인터넷이 연결돼 있는지 확인해 주세요.'}
     return;
   }
 
