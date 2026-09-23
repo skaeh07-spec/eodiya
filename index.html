@@ -162,6 +162,9 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;
   background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:14px;font-size:14px;max-width:calc(100% - 32px);transition:.25s;z-index:40;box-shadow:var(--shadow)}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+.acct{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}
+.acct>div{flex:1;min-width:200px}
+.acct .msg{flex-basis:100%;margin:0}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
@@ -258,7 +261,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0923-8';
+const APP_VER='0924-1';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -284,7 +287,7 @@ function fixMe(){
   state.friends=[main,...state.friends.filter(f=>f!==main)];
   return true;
 }
-function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function') schedulePublish()}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct()}}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -747,7 +750,7 @@ function viewFree(){
 }
 function viewManage(){
   const me=meOf();
-  let h=`<h2 class="sec">내 시간표</h2>`;
+  let h=acctHTML()+`<h2 class="sec">내 시간표</h2>`;
   if(!me){
     h+=`<div class="panel mecta"><p>이름을 적고 내 시간표를 만들어요. 한 번만 입력해 두면 친구들한테 링크로 보낼 수 있어요.</p>
       <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div>
@@ -1047,6 +1050,7 @@ async function publishMe(){
     // read back to confirm what friends will actually receive
     try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
+    watchFriends();
   }catch(e){console.warn('publish failed',e);setSync('error')}
   finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)&&FB.status!=='error') schedulePublish()}
 }
@@ -1061,6 +1065,14 @@ async function fetchPerson(code){
 const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
 let needRender=false;
 document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing()){needRender=false;render()}},50));
+function applyMine(d){
+  const me=meOf(); if(!me||!d||!d.data) return;
+  if(me.pubKey!==pubKeyOf(me)) return;            // this device has unsaved edits: they win
+  if(d.data===me.pubKey) return;                  // nothing new
+  let p;try{p=unpackV2(d.data)}catch(e){return}
+  me.name=d.name||p.name;me.classes=p.classes;if(/^#[0-9a-f]{6}$/i.test(d.color||''))me.color=d.color;
+  me.pubKey=pubKeyOf(me);me.pubAt=Date.now();localSave();if(!typing())render();else needRender=true;
+}
 function markGone(code){const f=others().find(x=>x.code===code);if(f&&!f.gone){f.gone=true;localSave();if(!editCls)render()}}
 function applyRemote(code,d){
   const f=others().find(x=>x.code===code); if(!f||!d||!d.data) return;
@@ -1077,6 +1089,7 @@ async function refreshAll(){
   try{
     await withTimeout(initFB(),15000);
     flushPublish();
+    if(isGoogle()){await pushAcct();await pullAcct()}
     Object.keys(subs).forEach(c=>{subs[c]();delete subs[c]}); // re-open live connections
     await Promise.all(others().filter(f=>f.code).map(async f=>{
       try{const snap=await withTimeout(FB.db.collection('people').doc(f.code).get({source:'server'}),10000);
@@ -1096,7 +1109,19 @@ const subs={};
 function watchFriends(){
   initFB().then(()=>{
     const codes=new Set(others().filter(f=>f.code).map(f=>f.code));
-    Object.keys(subs).forEach(c=>{if(!codes.has(c)){subs[c]();delete subs[c]}});
+    Object.keys(subs).forEach(c=>{if(!c.includes(':')&&!codes.has(c)){subs[c]();delete subs[c]}});
+    // my own doc + account list: keep other devices of the same account in sync
+    const me=meOf();
+    if(me&&me.code&&!subs['me:'+me.code]){
+      Object.keys(subs).filter(k=>k.startsWith('me:')).forEach(k=>{subs[k]();delete subs[k]});
+      subs['me:'+me.code]=FB.db.collection('people').doc(me.code).onSnapshot(snap=>{if(snap.exists)applyMine(snap.data())},()=>{delete subs['me:'+me.code]});
+    }
+    const u=FB.auth&&FB.auth.currentUser;
+    if(u&&!u.isAnonymous&&!subs['acct:'+u.uid]){
+      subs['acct:'+u.uid]=FB.db.collection('users').doc(u.uid).onSnapshot(snap=>{
+        if(snap.exists&&snap.data().list!==state.acctList&&listPayload()===state.acctList) pullAcct();
+      },()=>{delete subs['acct:'+u.uid]});
+    }
     codes.forEach(code=>{
       if(subs[code]) return;
       subs[code]=FB.db.collection('people').doc(code).onSnapshot(snap=>{if(snap.exists)applyRemote(code,snap.data());else markGone(code)},()=>{delete subs[code]});
@@ -1113,7 +1138,12 @@ async function refreshFriends(force){
   watchFriends();
 }
 function startSync(){
-  initFB().then(()=>{
+  initFB().then(async()=>{
+    FB.auth.getRedirectResult().then(r=>{if(r&&r.user&&!r.user.isAnonymous)afterLogin()}).catch(async e=>{
+      if(e.code==='auth/credential-already-in-use'&&e.credential){await FB.auth.signInWithCredential(e.credential);afterLogin()}});
+    FB.auth.onAuthStateChanged(()=>{if(tab==='manage'&&!typing())render()});
+    await fbUser().catch(()=>{});
+    if(isGoogle()) await pullAcct();
     refreshFriends(true);watchFriends();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
@@ -1121,6 +1151,99 @@ function startSync(){
   window.addEventListener('pagehide',flushPublish);
   window.addEventListener('online',()=>{refreshFriends(true);const me=meOf();if(me&&me.pubKey!==pubKeyOf(me))publishMe()});
   setInterval(()=>{if(document.visibilityState==='visible')refreshFriends()},5*60000);
+}
+
+
+/* ---------- optional Google account: same data on every device ---------- */
+const isGoogle=()=>{const u=FB.auth&&FB.auth.currentUser;return !!(u&&!u.isAnonymous)};
+function listPayload(){
+  return JSON.stringify(state.friends.map(f=>f.isMe?(f.code?{t:'m',c:f.code,s:f.secret||''}:{t:'P',d:packV2(f)})
+    :(f.code?{t:'c',c:f.code,n:f.nick||'',k:f.color}:{t:'p',d:packV2(f),k:f.color})));
+}
+let acctTimer=null,acctBusy=false;
+function scheduleAcct(){if(!isGoogle())return;clearTimeout(acctTimer);acctTimer=setTimeout(pushAcct,800)}
+async function pushAcct(){
+  const u=FB.auth&&FB.auth.currentUser; if(!u||u.isAnonymous) return;
+  const list=listPayload(); if(list===state.acctList) return;
+  try{
+    await withTimeout(FB.db.collection('users').doc(u.uid).set({list,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}),20000);
+    state.acctList=list;localSave();
+  }catch(e){console.warn('account save failed',e)}
+}
+async function pullAcct(){
+  const u=FB.auth&&FB.auth.currentUser; if(!u||u.isAnonymous||acctBusy) return;
+  acctBusy=true;
+  try{
+    const snap=await withTimeout(FB.db.collection('users').doc(u.uid).get({source:'server'}),15000);
+    const local=listPayload();
+    if(!snap.exists){await pushAcct();return}
+    const remote=snap.data().list;
+    if(remote===local){state.acctList=remote;localSave();return}
+    if(state.acctList&&local!==state.acctList){await pushAcct();return} // unsynced local edits win
+    // adopt the account's list
+    const items=JSON.parse(remote),out=[],prev=state.friends;
+    for(const it of items){
+      try{
+        if(it.t==='m'){
+          const old=prev.find(f=>f.isMe&&f.code===it.c);
+          const p=old||await fetchPerson(it.c); if(!p) continue;
+          out.push(Object.assign(p,{isMe:true,code:it.c,secret:it.s||p.secret}));
+        }else if(it.t==='c'){
+          const old=prev.find(f=>!f.isMe&&f.code===it.c);
+          const p=old||await fetchPerson(it.c); if(!p) continue;
+          out.push(Object.assign(p,{code:it.c,nick:it.n||undefined,color:/^#[0-9a-f]{6}$/i.test(it.k)?it.k:p.color}));
+        }else if(it.t==='p'||it.t==='P'){
+          const p=unpackV2(it.d); if(it.t==='P')p.isMe=true; else if(/^#[0-9a-f]{6}$/i.test(it.k))p.color=it.k; out.push(p);
+        }
+      }catch(e){}
+    }
+    const localMe=meOf(),cloudMe=out.find(f=>f.isMe);
+    if(localMe&&!cloudMe) out.unshift(localMe); // keep a "me" that was only on this device
+    else if(localMe&&cloudMe&&localMe.code&&localMe.code!==cloudMe.code) toast('이 기기에 따로 만든 내 시간표 대신 계정에 저장된 내 시간표를 쓸게요');
+    state.friends=out;state.acctList=remote;sel=null;localSave();render();watchFriends();
+  }catch(e){console.warn('account load failed',e)}
+  finally{acctBusy=false}
+}
+async function googleLogin(){
+  const msg=t=>{const el=document.getElementById('acct-msg');if(el){el.className='msg';el.textContent=t}};
+  try{
+    const u=await fbUser(),prov=new firebase.auth.GoogleAuthProvider();
+    msg('구글 로그인 창을 여는 중…');
+    try{ if(u.isAnonymous) await u.linkWithPopup(prov); else await FB.auth.signInWithPopup(prov) }
+    catch(e){
+      if(e.code==='auth/credential-already-in-use'||e.code==='auth/email-already-in-use'){
+        const cred=e.credential||firebase.auth.GoogleAuthProvider.credentialFromError&&firebase.auth.GoogleAuthProvider.credentialFromError(e);
+        await FB.auth.signInWithCredential(cred);   // this Google account is already used on another device
+      }else if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/web-storage-unsupported'].includes(e.code)){
+        msg('로그인 페이지로 이동할게요…');
+        if(u.isAnonymous) await u.linkWithRedirect(prov); else await FB.auth.signInWithRedirect(prov);
+        return;
+      }else throw e;
+    }
+    await afterLogin();
+  }catch(e){
+    console.warn(e);
+    const why=e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request'?'로그인 창이 닫혔어요.':
+      e.code==='auth/unauthorized-domain'?'Firebase 승인된 도메인에 이 주소가 없어요.':
+      e.code==='auth/operation-not-allowed'?'Firebase에서 Google 로그인이 아직 꺼져 있어요.':'로그인하지 못했어요 ('+(e.code||e.message)+')';
+    const el=document.getElementById('acct-msg');if(el){el.className='msg err';el.textContent=why}
+  }
+}
+async function afterLogin(){
+  await pullAcct();
+  const me=meOf(); if(me){me.pubKey='';publishMe()}
+  await pushAcct();watchFriends();
+  render();toast('✅ 구글 계정에 연결됐어요');
+}
+async function googleLogout(){
+  try{await FB.auth.signOut();await fbUser();state.acctList='';localSave();render();toast('로그아웃했어요. 이 기기의 데이터는 그대로 있어요.')}catch(e){}
+}
+function acctHTML(){
+  const u=FB.auth&&FB.auth.currentUser;
+  if(u&&!u.isAnonymous) return `<div class="panel acct"><div><b>✅ 구글 계정 연결됨</b><div class="sub">${esc(u.email||'')} · 다른 기기에서도 이 계정으로 로그인하면 내 시간표와 친구 목록이 똑같이 보여요.</div></div>
+    <button class="btn small" data-act="logout">로그아웃</button><p class="msg" id="acct-msg"></p></div>`;
+  return `<div class="panel acct"><div><b>구글 계정 연결 <span class="sub">(선택)</span></b><div class="sub">연결하면 폰을 바꾸거나 다른 기기에서도 똑같이 쓸 수 있고, 백업 코드가 필요 없어져요.</div></div>
+    <button class="btn primary small" data-act="login">연결하기</button><p class="msg" id="acct-msg"></p></div>`;
 }
 
 /* ---------- events ---------- */
@@ -1140,6 +1263,8 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='login'){googleLogin();return}
+  if(d.act==='logout'){googleLogout();return}
   if(d.act==='syncNow'){const me=meOf();if(me)me.pubKey='';setSync('saving');await publishMe();refreshFriends(true);render();return}
   if(d.setme){const f=state.friends.find(x=>x.id===d.setme);f.isMe=true;f.uid=f.uid||uid();
     state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;save();render();return}
