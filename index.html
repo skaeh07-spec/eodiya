@@ -155,7 +155,8 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .weeknav .wk0{width:auto;padding:0 10px;font-size:13px}
 .daytabs small,.gh small{display:block;font-size:10.5px;font-weight:400;opacity:.75}
 .ver{text-align:center;margin:18px 0 0;font-size:12px}
-#sync-msg .linkbtn{padding:0 4px;font-size:12.5px}
+#sync-msg .copybox{width:100%;min-height:60px;font-size:12.5px;margin:6px 0}
+.linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
 details.backup summary::after{content:" ▾";color:var(--muted)}
@@ -226,9 +227,6 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
   @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 }
 </style>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -253,16 +251,17 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0923-6';
+const APP_VER='0923-7';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
 
 let state={friends:[]};
-let tab='now', live=true, sel=null, openId=null, pending=null;
+let tab='now', live=true, sel=null, openId=null, pending=null, pendingErr=null;
 const meOf=()=>state.friends.find(f=>f.isMe);
 const others=()=>state.friends.filter(f=>!f.isMe);
-const label=f=>f.isMe?'나':f.name;
+const dn=f=>f.nick||f.name;
+const label=f=>f.isMe?'나':dn(f);
 
 function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}
   if(fixMe()) try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
@@ -349,7 +348,7 @@ const todayKey=()=>dateKey((new Date().getDay()+6)%7);
 const keyUTC=k=>Date.UTC(+k.slice(0,4),+k.slice(4,6)-1,+k.slice(6,8));
 const EPOCH=Date.UTC(1970,0,5);
 const k36=k=>Math.round((keyUTC(k)-EPOCH)/864e5).toString(36);
-const from36=v=>{const d=new Date(EPOCH+parseInt(v,36)*864e5);return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate())};
+const from36=v=>{const n=parseInt(v,36);if(!/^[0-9a-z]{1,5}$/.test(v)||!isFinite(n))return null;const d=new Date(EPOCH+n*864e5);return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate())};
 const md=k=>(+k.slice(4,6))+'/'+(+k.slice(6,8));
 function occurs(c,day,off=0){
   const dk=dateKey(day,off),wk=dateKey(0,off);
@@ -377,10 +376,10 @@ function applyFlags(c,fl){
     const old=tk.match(/^(o?)s(\d{8})$/);
     if(tk==='o') c.off=true;
     else if(old){if(old[1])c.off=true;c.skip=old[2]}
-    else if(tk[0]==='b'){c.rep='b';c.anchor=from36(tk.slice(1))}
-    else if(tk[0]==='w'){c.rep='s';c.weeks=tk.slice(1).split(',').filter(Boolean).map(from36)}
-    else if(tk[0]==='f') c.from=from36(tk.slice(1));
-    else if(tk[0]==='t') c.to=from36(tk.slice(1));
+    else if(tk[0]==='b'){const k=from36(tk.slice(1));if(k){c.rep='b';c.anchor=k}}
+    else if(tk[0]==='w'){const w=tk.slice(1).split(',').filter(Boolean).slice(0,60).map(from36).filter(Boolean);if(w.length){c.rep='s';c.weeks=w}}
+    else if(tk[0]==='f'){const k=from36(tk.slice(1));if(k)c.from=k}
+    else if(tk[0]==='t'){const k=from36(tk.slice(1));if(k)c.to=k}
   });
   return c;
 }
@@ -439,7 +438,7 @@ let editCls=null;
 const TYPES=['LEC','TUT','LAB','SEM','TST'];
 function classListHTML(f){
   const list=f.classes.slice().sort((a,b)=>(a.days[0]??9)-(b.days[0]??9)||a.start-b.start);
-  let h='<div class="clist">';
+  let h='<div class="clist">'+(!f.isMe&&f.code?'<p class="sub" style="margin:0 0 4px">☁️ 친구가 직접 올린 시간표예요. 여기서 고쳐도 친구가 시간표를 바꾸면 다시 덮어써져요.</p>':'');
   list.forEach(c=>{
     h+=editCls===f.id+':'+c.id?classEditor(f,c):
     `<button class="crow${c.off?' offrow':''}" data-cedit="${f.id}:${c.id}">
@@ -546,7 +545,7 @@ const unb64u=str=>{str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%
 const packPerson=f=>({u:f.uid,n:f.name,c:f.color,k:f.classes.map(c=>[c.course,c.type,c.days.join(''),c.start,c.end,c.loc,flagsOf(c)])});
 function unpackPerson(o){
   return{id:uid(),uid:o.u||null,name:String(o.n||'친구').slice(0,30),color:/^#[0-9a-f]{6}$/i.test(o.c)?o.c:PALETTE[0],
-    classes:(o.k||[]).map(k=>({id:uid(),course:String(k[0]),type:String(k[1]||''),days:String(k[2]).split('').map(Number).filter(n=>n>=0&&n<7),start:+k[3],end:+k[4],loc:String(k[5]||'')})).map((c,i)=>applyFlags(c,(o.k[i]||[])[6])).filter(c=>c.days.length&&c.end>c.start)};
+    classes:(o.k||[]).slice(0,60).map(k=>({id:uid(),course:String(k[0]??'').slice(0,40)||'수업',type:String(k[1]||'').slice(0,10),days:[...new Set(String(k[2]).split('').map(Number).filter(n=>n>=0&&n<7))],start:Math.max(0,Math.min(1440,+k[3])),end:Math.max(0,Math.min(1440,+k[4])),loc:String(k[5]||'').slice(0,40)})).map((c,i)=>applyFlags(c,(o.k[i]||[])[6])).filter(c=>c.days.length&&c.end>c.start)};
 }
 /* compact v2: fields joined by | and ~, then deflate + base64url */
 const TY2={LEC:'L',TUT:'T',LAB:'B',SEM:'S',TST:'X'},TY2R=Object.fromEntries(Object.entries(TY2).map(([a,b])=>[b,a]));
@@ -602,6 +601,7 @@ function addPerson(p){
   state.friends.push(p);sel&&sel.add(p.id);save();if(p.code)watchFriends();return{kind:'added',f:p};
 }
 function pendingHTML(){
+  if(!pending&&pendingErr) return `<div class="panel invite"><p>${esc(pendingErr.msg)}</p><div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendRetry">다시 시도</button><button class="btn" data-act="pendNo">닫기</button></div></div>`;
   if(!pending) return '';
   const me=meOf();
   if(me&&(pending.uid===me.uid||(pending.code&&pending.code===me.code))) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
@@ -615,8 +615,9 @@ async function checkHash(){
   if(!/^#(a|add|c)=/.test(location.hash)) return;
   const h=location.hash;
   history.replaceState(null,'',location.pathname+location.search);
-  try{pending=await personFromText(h)}catch(e){pending=null}
-  if(pending){tab='now';render()}
+  try{pending=await personFromText(h);pendingErr=pending?null:{h,msg:'링크에 해당하는 시간표를 찾지 못했어요. 친구가 공유를 멈췄을 수 있어요.'}}
+  catch(e){pending=null;pendingErr={h,msg:'인터넷 연결이 안 돼서 친구 시간표를 못 불러왔어요.'}}
+  tab='now';render();
 }
 
 /* ---------- views ---------- */
@@ -633,7 +634,7 @@ function viewNow(){
     const s=statusOf(f,r); let where,sub,badge;
     if(s.busy){
       where=esc(s.cur.loc||'강의실 미정');
-      sub=`${esc(s.cur.course)}${s.cur.type?' '+s.cur.type:''} · ${fmt(s.freeAt)}에 끝나요`;
+      sub=`${esc(s.cur.course)}${s.cur.type?' '+esc(s.cur.type):''} · ${fmt(s.freeAt)}에 끝나요`;
       badge=`<span class="badge busy">수업 중</span>`;
     }else{
       where=s.noclass?'오늘 수업 없음':s.done?'오늘 수업 끝':`${fmt(s.freeUntil)}까지 비어요`;
@@ -643,12 +644,12 @@ function viewNow(){
       const skipped=classesOn(f,r.day).find(c=>occurs(c,r.day)&&!isActive(c,r.day)&&c.start<=r.min&&r.min<c.end);
       if(skipped){
         where='수업 안 가요 😴';
-        sub=`${esc(skipped.course)}${skipped.type?' '+skipped.type:''} ${skipped.off?'꺼둠':'오늘 빠짐'} · ${fmt(skipped.start)}–${fmt(skipped.end)}`+(s.next?` · 다음: ${esc(s.next.course)} ${fmt(s.next.start)}`:'');
+        sub=`${esc(skipped.course)}${skipped.type?' '+esc(skipped.type):''} ${skipped.off?'꺼둠':'오늘 빠짐'} · ${fmt(skipped.start)}–${fmt(skipped.end)}`+(s.next?` · 다음: ${esc(s.next.course)} ${fmt(s.next.start)}`:'');
         badge=`<span class="badge free">비어있음</span>`;
       }
     }
-    return {s,html:`<div class="row" style="--fc:${f.color}"><span class="avatar">${esc([...f.name][0]||'?')}</span>
-      <div><div class="who">${esc(f.name)}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
+    return {s,html:`<div class="row" style="--fc:${f.color}"><span class="avatar">${esc([...dn(f)][0]||'?')}</span>
+      <div><div class="who">${esc(dn(f))}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
   });
   rows.sort((a,b)=>(a.s.busy-b.s.busy));
   return `<div class="panel"><p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준${live?' · 자동으로 갱신돼요':''}</p><div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
@@ -691,7 +692,7 @@ function viewGrid(){
     for(let t=lo+60;t<hi;t+=60) h+=`<div class="hline" style="top:${(t-lo)*PX}px"></div>`;
     const items=layoutDay(fs.flatMap(f=>classesOn(f,d).filter(c=>occurs(c,d,weekOff)).map(c=>({f,c,s:c.start,e:c.end}))));
     items.forEach(it=>{
-      const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=blkInfo.push({f,c,d,off:weekOff})-1;
+      const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=f.id+':'+c.id+':'+d+':'+weekOff;
       const wide=dayMode&&it.n<=3;
       const words=esc(c.course).split(/\s+/).map(w=>`<span class="w">${w}</span>`).join('');
       const act=isActive(c,d,weekOff);
@@ -706,8 +707,9 @@ function viewGrid(){
   else h+=`<p class="hint" style="margin:10px 0 0">${dayMode?'':'칸을 누르면 시간이랑 강의실이 나와요. '}내 수업을 누르면 "이번엔 안 가요"로 끌 수 있어요.</p>`;
   return `<div class="panel">${h}</div>`;
 }
+function blkFrom(i){const [fid,cid,d,off]=String(i).split(':');const f=state.friends.find(x=>x.id===fid);const c=f&&f.classes.find(x=>x.id===cid);return c?{f,c,d:+d,off:+off}:null}
 function sheetHTML(i){
-  const b=blkInfo[i]; if(!b) return '';
+  const b=blkFrom(i); if(!b) return '';
   const {f,c}=b;
   return `<div class="sheet-card" style="--fc:${f.color}"><div class="sheet-who"><span class="dot"></span>${esc(label(f))}</div>
     <div class="sheet-title">${esc(c.course)} <small>${esc(c.type)}</small></div>
@@ -758,10 +760,10 @@ function friendCard(f){
     const open=openId===f.id;
     h+=`<div class="friend" style="--fc:${f.color}"><div class="fhead">
       <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
-      <input type="text" value="${esc(f.name)}" data-name="${f.id}" aria-label="이름">
+      <input type="text" value="${esc(dn(f))}" data-name="${f.id}" maxlength="30" aria-label="이름">
       <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
-      ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?`☁️ 자동 업데이트 중${f.synced?' · '+ago(f.synced)+' 확인':''}`:'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
+      ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?(f.gone?'⛔ 친구가 시간표 공유를 멈췄어요. 마지막으로 받은 시간표가 보이고 있어요.':`☁️ 자동 업데이트 중${f.synced?' · '+ago(f.synced)+' 확인':''}`):'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
       ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
@@ -788,10 +790,15 @@ function render(){
   syncClock();
   document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
   const v=document.getElementById('view');
+  const keep={};v.querySelectorAll('textarea[id],input[id]').forEach(e=>{if(e.value&&e.type!=='file')keep[e.id]=e.value});
+  const focusId=document.activeElement&&document.activeElement.id;
   if(meOf()&&meOf().classes.length) shareLink().catch(()=>{});
   if(tab==='manage') prepBackup();
   v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage());
+  Object.entries(keep).forEach(([id,val])=>{const e=document.getElementById(id);if(e&&!e.value)e.value=val});
+  if(focusId){const e=document.getElementById(focusId);if(e)e.focus()}
 }
+const typing=()=>{const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.type!=='button'};
 
 /* ---------- demo ---------- */
 function demo(){
@@ -967,19 +974,19 @@ const FB_CONFIG={
 };
 const FB={db:null,auth:null,ready:null,status:'off'}; // status: off|saving|saved|error
 function rand(n){const a='abcdefghijkmnpqrstuvwxyz23456789',b=new Uint32Array(n);crypto.getRandomValues(b);return [...b].map(x=>a[x%a.length]).join('')}
+function loadScript(src){return new Promise((res,rej)=>{const e=document.createElement('script');e.src=src;e.onload=res;e.onerror=()=>{e.remove();rej(new Error('load '+src))};document.head.appendChild(e)})}
 function initFB(){
   if(FB.ready) return FB.ready;
-  FB.ready=new Promise((res,rej)=>{
-    const go=()=>{
-      try{
-        if(!window.firebase) throw new Error('sdk');
-        if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
-        FB.db=firebase.firestore();FB.auth=firebase.auth();res(true);
-      }catch(e){rej(e)}
-    };
-    if(window.firebase) go(); else window.addEventListener('load',go,{once:true});
-  });
-  FB.ready.catch(()=>{});
+  const base='https://www.gstatic.com/firebasejs/10.12.2/';
+  FB.ready=(async()=>{
+    if(!window.firebase||!firebase.firestore){
+      if(!window.firebase) await loadScript(base+'firebase-app-compat.js');
+      await Promise.all([firebase.auth?0:loadScript(base+'firebase-auth-compat.js'),firebase.firestore?0:loadScript(base+'firebase-firestore-compat.js')]);
+    }
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    FB.db=firebase.firestore();FB.auth=firebase.auth();return true;
+  })();
+  FB.ready.catch(()=>{FB.ready=null}); // allow retry later (e.g. when back online)
   return FB.ready;
 }
 async function fbUser(){
@@ -1002,12 +1009,12 @@ function syncText(){
 }
 let pubTimer=null,pubRunning=false;
 function schedulePublish(){
-  const me=meOf(); if(!me||!me.classes.length) return;
+  const me=meOf(); if(!me||(!me.classes.length&&!me.code)) return;
   if(me.pubKey===pubKeyOf(me)&&me.code) return;
   clearTimeout(pubTimer);pubTimer=setTimeout(publishMe,1200);
 }
 async function publishMe(){
-  const me=meOf(); if(!me||!me.classes.length||pubRunning) return;
+  const me=meOf(); if(!me||(!me.classes.length&&!me.code)||pubRunning) return;
   pubRunning=true;setSync('saving');
   try{
     const user=await fbUser(),db=FB.db,key=pubKeyOf(me);
@@ -1032,7 +1039,7 @@ async function publishMe(){
     try{const back=await db.collection('people').doc(me.code).get({source:'server'});me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
   }catch(e){console.warn('publish failed',e);setSync('error')}
-  finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)) schedulePublish()}
+  finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)&&FB.status!=='error') schedulePublish()}
 }
 function localSave(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){}}
 async function fetchPerson(code){
@@ -1043,12 +1050,15 @@ async function fetchPerson(code){
   p.name=d.name||p.name;p.code=code;return p;
 }
 const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
+let needRender=false;
+document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing()&&!editCls){needRender=false;render()}},50));
+function markGone(code){const f=others().find(x=>x.code===code);if(f&&!f.gone){f.gone=true;localSave();if(!editCls)render()}}
 function applyRemote(code,d){
   const f=others().find(x=>x.code===code); if(!f||!d||!d.data) return;
   let p; try{p=unpackV2(d.data)}catch(e){return}
   p.name=d.name||p.name;
-  f.synced=Date.now();
-  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!editCls)render()}
+  f.synced=Date.now();f.gone=false;
+  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!editCls&&!typing())render();else needRender=true}
   else localSave();
 }
 /* realtime: listen to each ☁️ friend's document while the app is open */
@@ -1059,7 +1069,7 @@ function watchFriends(){
     Object.keys(subs).forEach(c=>{if(!codes.has(c)){subs[c]();delete subs[c]}});
     codes.forEach(code=>{
       if(subs[code]) return;
-      subs[code]=FB.db.collection('people').doc(code).onSnapshot(snap=>{if(snap.exists)applyRemote(code,snap.data())},()=>{delete subs[code]});
+      subs[code]=FB.db.collection('people').doc(code).onSnapshot(snap=>{if(snap.exists)applyRemote(code,snap.data());else markGone(code)},()=>{delete subs[code]});
     });
   }).catch(()=>{});
 }
@@ -1068,7 +1078,7 @@ async function refreshFriends(force){
   if(!force&&Date.now()-lastRefresh<30000) return;
   lastRefresh=Date.now();
   await Promise.all(others().filter(f=>f.code).map(async f=>{
-    try{await initFB();const snap=await FB.db.collection('people').doc(f.code).get();if(snap.exists)applyRemote(f.code,snap.data())}catch(e){}
+    try{await initFB();const snap=await FB.db.collection('people').doc(f.code).get();if(snap.exists)applyRemote(f.code,snap.data());else markGone(f.code)}catch(e){}
   }));
   watchFriends();
 }
@@ -1077,7 +1087,8 @@ function startSync(){
     refreshFriends(true);watchFriends();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshFriends()});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refreshFriends();schedulePublish()}});
+  window.addEventListener('online',()=>{refreshFriends(true);const me=meOf();if(me&&me.pubKey!==pubKeyOf(me))publishMe()});
   setInterval(()=>{if(document.visibilityState==='visible')refreshFriends()},5*60000);
 }
 
@@ -1111,7 +1122,7 @@ view.addEventListener('click',async e=>{
   if(d.offc){const [fid,cid]=d.offc.split(':');const c=state.friends.find(x=>x.id===fid).classes.find(x=>x.id===cid);c.off=!c.off;if(c.off)c.skip=undefined;save();render();return}
   if(d.gmode){gridMode=d.gmode;render();return}
   if(d.gday!==undefined){gridDay=+d.gday;render();return}
-  if(d.blk!==undefined){const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(+d.blk);sh.hidden=false;return}
+  if(d.blk!==undefined){const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(d.blk);sh.hidden=!sh.innerHTML;return}
   if(d.act==='makeMe'){
     if(meOf()){render();return}
     const name=(document.getElementById('me-name').value||'').trim()||'나';
@@ -1125,8 +1136,9 @@ view.addEventListener('click',async e=>{
     const m=document.getElementById('share-msg');
     const copied=()=>{m.textContent='공유 메시지를 복사했어요. 카톡에 붙여넣어 보내세요.'};
     if(navigator.share){navigator.share({title:'어디야? 시간표',text}).catch(()=>{});return}
-    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied,()=>prompt('이 메시지를 복사해서 보내세요',text));
-    else prompt('이 메시지를 복사해서 보내세요',text);
+    const manual=()=>{m.innerHTML=`<textarea readonly class="copybox">${esc(text)}</textarea><br>위 내용을 길게 눌러 복사해서 보내세요.`;const tb=m.querySelector('textarea');tb.focus();tb.select()};
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied,manual);
+    else manual();
     return;
   }
   if(d.act==='addCode'){
@@ -1138,8 +1150,9 @@ view.addEventListener('click',async e=>{
     m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!`;
     return;
   }
-  if(d.act==='pendYes'){addPerson(pending);pending=null;tab='now';render();return}
-  if(d.act==='pendNo'){pending=null;render();return}
+  if(d.act==='pendYes'){const r=addPerson(pending);pending=null;tab='now';render();if(r.kind==='me')return;return}
+  if(d.act==='pendNo'){pending=null;pendingErr=null;render();return}
+  if(d.act==='pendRetry'){const h=pendingErr&&pendingErr.h;pendingErr=null;if(h){history.replaceState(null,'',location.pathname+location.search+h);checkHash()}return}
   if(d.act==='export'){
     const code=bkCache||await exportCode(),box=document.getElementById('bk-box'),m=document.getElementById('bk-msg');
     box.value=code;
@@ -1185,12 +1198,14 @@ view.addEventListener('click',async e=>{
     f.classes.push({id:uid(),course:g('course')||'수업',type:'',days,start:s,end:en2,loc:g('loc')});save();render();return;
   }
   if(d.delc){editCls=null;const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
-  if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();return}
+  if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;
+    {const f=state.friends.find(x=>x.id===d.delf);
+     if(f&&f.isMe&&f.code){const code=f.code;fbUser().then(()=>FB.db.collection('people').doc(code).delete()).catch(()=>{})}}state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();watchFriends();return}
 });
 view.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.photo&&t.files&&t.files[0]){readPhoto(t.dataset.photo,t.files[0]);t.value='';return}
-  if(t.dataset.name){const f=state.friends.find(x=>x.id===t.dataset.name);f.name=t.value.trim()||f.name;save()}
+  if(t.dataset.name){const f=state.friends.find(x=>x.id===t.dataset.name),v=t.value.trim().slice(0,30);if(f.isMe||!f.code)f.name=v||f.name;else f.nick=v&&v!==f.name?v:undefined;save()}
   if(t.dataset.color){const f=state.friends.find(x=>x.id===t.dataset.color);f.color=t.value;save();render()}
 });
 function addFriend(){
@@ -1200,12 +1215,11 @@ function addFriend(){
 }
 
 function toggleBlk(d){
-  const b=blkInfo[+(d.skip!==undefined?d.skip:d.offb)]; if(!b) return;
+  const key=d.skip!==undefined?d.skip:d.offb,b=blkFrom(key); if(!b) return;
   if(d.skip!==undefined){const k=dateKey(b.d,b.off);b.c.skip=b.c.skip===k?undefined:k}
   else {b.c.off=!b.c.off; if(b.c.off) b.c.skip=undefined}
   save();render();
-  const i=blkInfo.findIndex(x=>x.c===b.c&&x.d===b.d),sh=document.getElementById('sheet');
-  if(i>=0) sh.innerHTML=sheetHTML(i); else sh.hidden=true;
+  const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(key);if(!sh.innerHTML)sh.hidden=true;
 }
 document.getElementById('sheet').addEventListener('click',e=>{
   const sh=e.currentTarget,t=e.target.closest('button');
@@ -1214,7 +1228,7 @@ document.getElementById('sheet').addEventListener('click',e=>{
 });
 load(); render(); checkHash(); startSync();
 window.addEventListener('hashchange',()=>checkHash());
-setInterval(()=>{if(live&&tab!=='manage')render()},30000);
+setInterval(()=>{if(live&&tab!=='manage'&&!typing())render()},30000);
 </script>
 </body>
 </html>
