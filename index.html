@@ -156,6 +156,12 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .daytabs small,.gh small{display:block;font-size:10.5px;font-weight:400;opacity:.75}
 .ver{text-align:center;margin:18px 0 0;font-size:12px}
 #sync-msg .copybox{width:100%;min-height:60px;font-size:12.5px;margin:6px 0}
+#refreshBtn{font-size:17px;padding:5px 11px}
+#refreshBtn.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:14px;font-size:14px;max-width:calc(100% - 32px);transition:.25s;z-index:40;box-shadow:var(--shadow)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
@@ -236,6 +242,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
       <select id="daySel" aria-label="요일"></select>
       <input id="timeSel" type="time" aria-label="시간">
       <button id="liveBtn" class="live on" type="button">지금</button>
+      <button id="refreshBtn" class="live" type="button" aria-label="새로고침" title="새로고침">⟳</button>
     </div>
   </header>
 
@@ -251,7 +258,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0923-7';
+const APP_VER='0923-8';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -763,7 +770,7 @@ function friendCard(f){
       <input type="text" value="${esc(dn(f))}" data-name="${f.id}" maxlength="30" aria-label="이름">
       <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
-      ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?(f.gone?'⛔ 친구가 시간표 공유를 멈췄어요. 마지막으로 받은 시간표가 보이고 있어요.':`☁️ 자동 업데이트 중${f.synced?' · '+ago(f.synced)+' 확인':''}`):'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
+      ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?(f.gone?'⛔ 친구가 시간표 공유를 멈췄어요. 마지막으로 받은 시간표가 보이고 있어요.':`☁️ 자동 업데이트 중${f.remoteAt?' · 친구가 '+ago(f.remoteAt)+' 저장':''}${f.synced?' · '+ago(f.synced)+' 확인':''}`):'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
       ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
@@ -1011,8 +1018,10 @@ let pubTimer=null,pubRunning=false;
 function schedulePublish(){
   const me=meOf(); if(!me||(!me.classes.length&&!me.code)) return;
   if(me.pubKey===pubKeyOf(me)&&me.code) return;
-  clearTimeout(pubTimer);pubTimer=setTimeout(publishMe,1200);
+  clearTimeout(pubTimer);pubTimer=setTimeout(publishMe,400);
 }
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('timeout'),{code:'timeout'})),ms))]);
+function flushPublish(){const me=meOf();if(me&&(me.classes.length||me.code)&&me.pubKey!==pubKeyOf(me)){clearTimeout(pubTimer);publishMe()}}
 async function publishMe(){
   const me=meOf(); if(!me||(!me.classes.length&&!me.code)||pubRunning) return;
   pubRunning=true;setSync('saving');
@@ -1023,20 +1032,20 @@ async function publishMe(){
       const code=rand(10),secret=rand(28),b=db.batch();
       b.set(db.collection('people').doc(code),doc);
       b.set(db.collection('secrets').doc(code),{s:secret});
-      await b.commit();
+      await withTimeout(b.commit(),20000);
       me.code=code;me.secret=secret;
     }else{
-      try{ await db.collection('people').doc(me.code).set(doc); }
+      try{ await withTimeout(db.collection('people').doc(me.code).set(doc),20000); }
       catch(e){
         if(e.code!=='permission-denied'||!me.secret) throw e;
         const b=db.batch(); // reclaim after the anonymous account changed (e.g. restored from backup)
         b.set(db.collection('claims').doc(me.code+'_'+user.uid),{s:me.secret});
         b.set(db.collection('people').doc(me.code),doc);
-        await b.commit();
+        await withTimeout(b.commit(),20000);
       }
     }
     // read back to confirm what friends will actually receive
-    try{const back=await db.collection('people').doc(me.code).get({source:'server'});me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
+    try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
   }catch(e){console.warn('publish failed',e);setSync('error')}
   finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)&&FB.status!=='error') schedulePublish()}
@@ -1051,16 +1060,37 @@ async function fetchPerson(code){
 }
 const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
 let needRender=false;
-document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing()&&!editCls){needRender=false;render()}},50));
+document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing()){needRender=false;render()}},50));
 function markGone(code){const f=others().find(x=>x.code===code);if(f&&!f.gone){f.gone=true;localSave();if(!editCls)render()}}
 function applyRemote(code,d){
   const f=others().find(x=>x.code===code); if(!f||!d||!d.data) return;
   let p; try{p=unpackV2(d.data)}catch(e){return}
   p.name=d.name||p.name;
   f.synced=Date.now();f.gone=false;
-  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!editCls&&!typing())render();else needRender=true}
-  else localSave();
+  if(d.updatedAt&&d.updatedAt.toMillis)f.remoteAt=d.updatedAt.toMillis();
+  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!typing())render();else needRender=true}
+  else{localSave();if(tab==='manage'&&!typing())render()}
 }
+async function refreshAll(){
+  const btn=document.getElementById('refreshBtn');btn.classList.add('spin');btn.disabled=true;
+  let ok=0,fail=0,msg;
+  try{
+    await withTimeout(initFB(),15000);
+    flushPublish();
+    Object.keys(subs).forEach(c=>{subs[c]();delete subs[c]}); // re-open live connections
+    await Promise.all(others().filter(f=>f.code).map(async f=>{
+      try{const snap=await withTimeout(FB.db.collection('people').doc(f.code).get({source:'server'}),10000);
+        if(snap.exists)applyRemote(f.code,snap.data());else markGone(f.code);ok++}catch(e){fail++}
+    }));
+    watchFriends();
+    const legacy=others().filter(f=>!f.code&&f.classes.length).length;
+    msg=fail?`⚠️ ${fail}명은 못 불러왔어요. 인터넷 연결을 확인해 주세요.`:`✅ 새로고침 완료 · ☁️ 친구 ${ok}명 최신으로 받았어요`+(legacy?` · 🔗 ${legacy}명은 예전 링크라 업데이트가 안 돼요`:'');
+  }catch(e){msg='⚠️ 서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'}
+  btn.classList.remove('spin');btn.disabled=false;
+  render();toast(msg);
+}
+function toast(t){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.appendChild(el)}
+  el.textContent=t;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),4000)}
 /* realtime: listen to each ☁️ friend's document while the app is open */
 const subs={};
 function watchFriends(){
@@ -1087,17 +1117,19 @@ function startSync(){
     refreshFriends(true);watchFriends();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refreshFriends();schedulePublish()}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refreshFriends();schedulePublish()}else flushPublish()});
+  window.addEventListener('pagehide',flushPublish);
   window.addEventListener('online',()=>{refreshFriends(true);const me=meOf();if(me&&me.pubKey!==pubKeyOf(me))publishMe()});
   setInterval(()=>{if(document.visibilityState==='visible')refreshFriends()},5*60000);
 }
 
 /* ---------- events ---------- */
-document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;render()}});
+document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;editCls=null;render()}});
 const daySel=document.getElementById('daySel');
 DAYS.forEach((d,i)=>daySel.insertAdjacentHTML('beforeend',`<option value="${i}">${d}요일</option>`));
 function setLive(on){live=on;document.getElementById('liveBtn').classList.toggle('on',on);render()}
 document.getElementById('liveBtn').addEventListener('click',()=>setLive(true));
+document.getElementById('refreshBtn').addEventListener('click',refreshAll);
 daySel.addEventListener('change',()=>setLive(false));
 document.getElementById('timeSel').addEventListener('change',()=>setLive(false));
 
@@ -1218,7 +1250,7 @@ function toggleBlk(d){
   const key=d.skip!==undefined?d.skip:d.offb,b=blkFrom(key); if(!b) return;
   if(d.skip!==undefined){const k=dateKey(b.d,b.off);b.c.skip=b.c.skip===k?undefined:k}
   else {b.c.off=!b.c.off; if(b.c.off) b.c.skip=undefined}
-  save();render();
+  save();flushPublish();render();
   const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(key);if(!sh.innerHTML)sh.hidden=true;
 }
 document.getElementById('sheet').addEventListener('click',e=>{
