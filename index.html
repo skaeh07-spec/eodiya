@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="어디야?">
 <meta name="theme-color" content="#4B5BFF">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -181,10 +182,40 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .chip .avatar.xs{margin-left:-3px}
 .avpick{position:relative;cursor:pointer;flex:none}
 .avcam{position:absolute;right:-4px;bottom:-4px;font-size:11px;background:var(--panel);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.fold{padding:0}
+.fold>summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"▾";margin-left:auto;color:var(--muted);transition:transform .2s}
+.fold[open]>summary::after{transform:rotate(180deg)}
+.fold>summary .sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+.fold>:not(summary){margin-left:18px;margin-right:18px}
+.fold>:last-child{margin-bottom:16px}
+.fold .acct{margin:0 18px 16px}
+details.fold.addbox{margin-bottom:12px}
+.colorin{width:28px;height:28px;border:none;padding:0;background:none}
+.profile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding-top:22px;margin-bottom:6px}
+.avbig{position:relative;cursor:pointer}
+.avatar.lg{width:116px;height:116px;border-radius:50%;background:var(--fc);color:#fff;display:grid;place-items:center;font-weight:700;font-size:44px;box-shadow:0 6px 20px rgba(0,0,0,.18);border:3px solid var(--panel);outline:3px solid var(--fc)}
+.avbig .avcam{width:32px;height:32px;font-size:16px;right:0;bottom:0}
+.pname{font-size:22px;font-weight:700;text-align:center;border:1px solid transparent;background:transparent;border-radius:10px;padding:4px 8px;max-width:100%;margin-top:6px}
+.pname:hover,.pname:focus{border-color:var(--line);background:var(--soft)}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:4px 0}
+.profile .sharebar{justify-content:center;padding:6px 0 0;width:100%}
+.mebody{padding-top:14px}
+.tip{margin-bottom:12px}
+.crop-card{text-align:center}
+#cropcv{width:min(300px,76vw);height:auto;aspect-ratio:1;border-radius:18px;touch-action:none;cursor:grab;background:#000;display:block;margin:6px auto 10px}
+.zoomrow{justify-content:center}
+.zoomrow input{flex:1;max-width:240px}
+.sub-fold{background:var(--soft);border-radius:16px;margin:8px 0}
+.sub-fold>summary{padding:11px 14px}
+.sub-fold>:not(summary){margin-left:14px;margin-right:14px}
+.sub-fold>:last-child{margin-bottom:12px}
+.sub-fold textarea{background:var(--panel)}
+.sub-fold .expbox{margin:0 14px 12px;padding:0;background:none}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
-details.backup summary::after{content:" ▾";color:var(--muted)}
 details.backup[open] summary{margin-bottom:8px}
 .nowline{position:absolute;left:-2px;right:-2px;border-top:2.5px solid var(--busy);z-index:3}
 .nowline::before{content:"";position:absolute;left:-4px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--busy)}
@@ -267,10 +298,11 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
   </header>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="now" aria-selected="true">지금 어디?</button>
+    <button role="tab" data-tab="now" aria-selected="true">지금</button>
     <button role="tab" data-tab="grid" aria-selected="false">시간표</button>
-    <button role="tab" data-tab="free" aria-selected="false">같이 비는 시간</button>
-    <button role="tab" data-tab="manage" aria-selected="false">친구 관리</button>
+    <button role="tab" data-tab="free" aria-selected="false">빈 시간</button>
+    <button role="tab" data-tab="manage" aria-selected="false">친구</button>
+    <button role="tab" data-tab="me" aria-selected="false">내 시간표</button>
   </nav>
 
   <main id="view"></main>
@@ -278,7 +310,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0924-5';
+const APP_VER='0924-7';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -288,6 +320,8 @@ let tab='now', live=true, sel=null, openId=null, pending=null, pendingErr=null;
 const meOf=()=>state.friends.find(f=>f.isMe);
 const others=()=>state.friends.filter(f=>!f.isMe);
 const dn=f=>f.nick||f.name;
+function isOpen(key,def){const u=state.ui||{};return key in u?u[key]:def}
+const openAttr=(key,def)=>isOpen(key,def)?' open':'';
 const PHOTO_RE=/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 const okPhoto=v=>typeof v==='string'&&v.length<=40000&&PHOTO_RE.test(v)?v:undefined;
 const phash=v=>v?v.length+':'+v.slice(-24):'';
@@ -697,11 +731,11 @@ function foldICS(line){ // lines longer than 75 bytes must be folded
 function exportHTML(f){
   if(!f.classes.length) return '';
   const def=addDaysKey(todayKey(),7*14),iso=k=>k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8);
-  return `<div class="expbox"><b>📅 캘린더로 내보내기</b>
-    <p class="sub" style="margin:4px 0 8px">아이폰 캘린더나 구글 캘린더에 이 시간표를 넣어요. 끝나는 날이 정해지지 않은 수업은 아래 날짜까지 반복해요.</p>
+  return `<details class="fold sub-fold" data-fold="exp-${f.id}"${openAttr('exp-'+f.id,false)}><summary><b>📅 캘린더로 내보내기</b></summary><div class="expbox">
+    <p class="sub" style="margin:0 0 8px">아이폰 캘린더나 구글 캘린더에 이 시간표를 넣어요. 끝나는 날이 정해지지 않은 수업은 아래 날짜까지 반복해요.</p>
     <div class="ce-row"><span class="sub">반복 끝나는 날</span><input type="date" id="ics-until-${f.id}" value="${iso(def)}"></div>
     <div class="actions" style="margin-bottom:0"><button class="btn" data-icsdl="${f.id}">파일 받기</button>${navigator.canShare?`<button class="btn" data-icsshare="${f.id}">공유…</button>`:''}</div>
-    <p class="msg" id="icsmsg-${f.id}"></p></div>`;
+    <p class="msg" id="icsmsg-${f.id}"></p></div></details>`;
 }
 function icsFile(fid){
   const f=state.friends.find(x=>x.id===fid),u=(document.getElementById('ics-until-'+fid)||{}).value;
@@ -722,7 +756,7 @@ function importICSInto(fid,text){
 
 /* ---------- backup ---------- */
 function backupHTML(){
-  return `<details class="panel backup"><summary>백업 · 복원</summary>
+  return `<details class="panel fold backup" data-fold="backup"${openAttr('backup',false)}><summary><b>백업 · 복원</b> <span class="sub">코드로 옮기기</span></summary>
   <p class="hint">친구 목록과 내 시간표 수정 권한을 코드로 내보내요. 폰을 바꾸거나 데이터가 지워졌을 때 이 코드로 복구해요. <b>친구한테는 보내지 말고 나만 보관하세요.</b></p>
   <div class="actions"><button class="btn primary" data-act="export" ${state.friends.length?'':'disabled'}>백업 코드 복사</button></div>
   <textarea id="bk-box" placeholder="여기에 백업 코드를 붙여넣으세요" style="min-height:80px"></textarea>
@@ -958,36 +992,62 @@ function viewFree(){
   return h+'</div>';
 }
 function viewManage(){
+  let h='';
+  if(!meOf()) h+=`<div class="panel tip">💡 <b>내 시간표</b> 탭에서 내 시간표를 먼저 만들면, 친구들한테 링크로 보낼 수 있어요. <button class="linkbtn" data-act="goManage">바로 가기</button></div>`;
+  h+=`<details class="panel fold addbox" data-fold="add"${openAttr('add',!others().length)}><summary><b>＋ 친구 추가</b> <span class="sub">받은 링크 붙여넣기</span></summary>
+    <p class="hint" style="margin-top:10px">친구가 보낸 공유 메시지를 붙여넣으세요.</p>
+    <textarea id="add-box" style="min-height:70px" placeholder="도건의 시간표 📍 https://…"></textarea>
+    <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="linkbtn" data-act="add">또는 직접 입력하기</button></div>
+    <p class="msg" id="add-msg"></p></details>`;
+  const fr=others();
+  h+=`<h2 class="sec">친구 ${fr.length}명</h2>`;
+  if(!fr.length) h+=`<div class="panel empty"><p>아직 친구가 없어요. 친구한테 받은 링크를 위에 붙여넣거나, 링크를 눌러서 추가해요.</p><div class="actions" style="justify-content:center"><button class="btn sunny" data-act="demo">예시로 둘러보기</button></div></div>`;
+  fr.forEach(f=>h+=friendCard(f));
+  return h;
+}
+function profileHTML(me){
+  return `<div class="panel profile" style="--fc:${me.color}">
+    <label class="avbig" title="프로필 사진 바꾸기">${avatarHTML(me,'avatar lg')}<span class="avcam">📷</span><input type="file" accept="image/*" data-avatar="${me.id}" hidden></label>
+    <input type="text" class="pname" value="${esc(me.name)}" data-name="${me.id}" maxlength="30" aria-label="내 이름">
+    <div class="sub">${me.classes.length}개 수업 · 친구들한테 이렇게 보여요</div>
+    <div class="pbtns">${me.photo?`<button class="btn small" data-act="cropAgain">✂️ 사진 조정</button><button class="btn small" data-act="rmphoto">사진 지우기</button>`:`<span class="sub">동그라미를 눌러서 프로필 사진을 넣어보세요</span>`}</div>
+    <div class="sharebar"><button class="btn sunny" data-act="share" ${me.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>
+  </div>`;
+}
+function viewMe(){
   const me=meOf();
-  let h=installHTML()+acctHTML()+`<h2 class="sec">내 시간표</h2>`;
+  let h=installHTML();
   if(!me){
     h+=`<div class="panel mecta"><p>이름을 적고 내 시간표를 만들어요. 한 번만 입력해 두면 친구들한테 링크로 보낼 수 있어요.</p>
       <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div>
       ${others().some(f=>f.classes.length)?`<p class="hint" style="margin-top:6px">이미 친구 목록에 내 시간표를 넣어뒀다면, 눌러서 내 시간표로 바꾸세요.</p><div class="actions">${others().filter(f=>f.classes.length).map(f=>`<button class="btn small" data-setme="${f.id}"><span class="dot" style="background:${f.color}"></span> ${esc(f.name)}</button>`).join('')}</div>`:''}</div>`;
-  } else h+=friendCard(me);
-  h+=`<h2 class="sec">친구</h2>
-  <div class="panel addbox"><p class="hint">친구가 보낸 공유 메시지를 붙여넣으세요.</p>
-    <textarea id="add-box" style="min-height:70px" placeholder="도건의 시간표 📍 https://…"></textarea>
-    <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="linkbtn" data-act="add">또는 직접 입력하기</button></div>
-    <p class="msg" id="add-msg"></p></div>`;
-  others().forEach(f=>h+=friendCard(f));
-  return h+backupHTML()+`<p class="ver sub">어디야? 버전 ${APP_VER} · 친구도 같은 버전이어야 모든 기능이 보여요</p>`;
+  }else{
+    h+=profileHTML(me);
+    h+=`<h2 class="sec">내 수업</h2><div class="panel mebody">${cardBody(me)}</div>`;
+  }
+  h+=`<h2 class="sec">계정 · 백업</h2>`+acctHTML()+backupHTML();
+  return h+`<p class="ver sub">어디야? 버전 ${APP_VER} · 친구도 같은 버전이어야 모든 기능이 보여요</p>`;
 }
 function friendCard(f){
   let h='';
   {
     const open=openId===f.id;
     h+=`<div class="friend" style="--fc:${f.color}"><div class="fhead">
-      ${f.isMe?`<label class="avpick" title="프로필 사진 바꾸기">${avatarHTML(f,'avatar sm')}<span class="avcam">📷</span><input type="file" accept="image/*" data-avatar="${f.id}" hidden></label>`:avatarHTML(f,'avatar sm')}
-      <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
+      ${avatarHTML(f,'avatar sm')}
       <input type="text" value="${esc(dn(f))}" data-name="${f.id}" maxlength="30" aria-label="이름">
       <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
       ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?(f.gone?'⛔ 친구가 시간표 공유를 멈췄어요. 마지막으로 받은 시간표가 보이고 있어요.':`☁️ 자동 업데이트 중${f.remoteAt?' · 친구가 '+ago(f.remoteAt)+' 저장':''}${f.synced?' · '+ago(f.synced)+' 확인':''}`):'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
-      ${f.isMe&&f.photo?`<div class="sub" style="padding:0 14px 6px">프로필 사진이 친구들 화면에도 보여요 · <button class="linkbtn" data-act="rmphoto" style="padding:0">사진 지우기</button></div>`:''}
-      ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
-    if(open){
-      h+=`<div class="fbody">
+`;
+    if(open) h+=`<div class="fbody">${cardBody(f)}</div>`;
+    h+='</div>';
+  }
+  return h;
+}
+function cardBody(f){
+      return `
+        <div class="ce-row" style="margin-bottom:8px"><span class="sub">시간표 색</span><input type="color" value="${f.color}" data-color="${f.id}" aria-label="색" class="colorin"></div>
+        <details class="fold sub-fold" data-fold="imp-${f.id}"${openAttr('imp-'+f.id,!f.classes.length)}><summary><b>📥 시간표 불러오기</b> <span class="sub">Quest 복사 · 사진 · 캘린더 파일</span></summary>
         <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요. 캘린더 파일(.ics) 내용을 붙여넣어도 읽어요.</p>
         <textarea id="paste-${f.id}" style="min-height:160px" placeholder="MATH 137 | MWF | 10:30-11:20 | MC 2065&#10;CS 135 | TTh | 1:00PM-2:20PM | DC 1350&#10;경제원론 | 화목 | 14:30-15:50 | HH 1101"></textarea>
         <div class="actions" style="margin-top:0"><label class="btn photo">📷 사진에서 글씨 읽기<input type="file" accept="image/*" data-photo="${f.id}" hidden></label><label class="btn photo">📅 캘린더 파일(.ics)<input type="file" accept=".ics,text/calendar" data-ics="${f.id}" hidden></label></div>
@@ -997,15 +1057,11 @@ function friendCard(f){
 • 오전/오후 표시가 없고 1~7시면 오후로 봐요
 • 사진은 Quest 주간 시간표(초록 칸) 스크린샷이나 List View 스크린샷을 읽을 수 있어요. 읽은 글씨를 확인하고 고친 다음 "시간표 읽기"를 누르세요</pre></details>
         <div class="actions"><button class="btn primary" data-parse="${f.id}">시간표 읽기</button><button class="btn" data-parse-replace="${f.id}">기존 것 지우고 읽기</button></div>
+        </details>
         <p class="msg" id="msg-${f.id}"></p>
         ${classListHTML(f)}
         ${exportHTML(f)}
-        <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">${f.isMe?'내 시간표 삭제':'친구 삭제'}</button></div>
-      </div>`;
-    }
-    h+='</div>';
-  }
-  return h;
+        <div class="actions" style="justify-content:flex-end;margin-bottom:0"><button class="btn small danger" data-delf="${f.id}">${f.isMe?'내 시간표 삭제':'친구 삭제'}</button></div>`;
 }
 
 function render(){
@@ -1015,8 +1071,8 @@ function render(){
   const keep={};v.querySelectorAll('textarea[id],input[id]').forEach(e=>{if(e.value&&e.type!=='file')keep[e.id]=e.value});
   const focusId=document.activeElement&&document.activeElement.id;
   if(meOf()&&meOf().classes.length) shareLink().catch(()=>{});
-  if(tab==='manage') prepBackup();
-  v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage());
+  if(tab==='me') prepBackup();
+  v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():tab==='me'?viewMe():viewManage());
   Object.entries(keep).forEach(([id,val])=>{const e=document.getElementById(id);if(e&&!e.value)e.value=val});
   if(focusId){const e=document.getElementById(focusId);if(e)e.focus()}
 }
@@ -1295,7 +1351,7 @@ function applyRemote(code,d){
   const ph=okPhoto(d.photo);if((ph||'')!==(f.photo||'')){f.photo=ph;localSave();if(!typing())render();else needRender=true}
   if(d.updatedAt&&d.updatedAt.toMillis)f.remoteAt=d.updatedAt.toMillis();
   if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!typing())render();else needRender=true}
-  else{localSave();if(tab==='manage'&&!typing())render()}
+  else{localSave();if((tab==='manage'||tab==='me')&&!typing())render()}
 }
 async function refreshAll(){
   const btn=document.getElementById('refreshBtn');btn.classList.add('spin');btn.disabled=true;
@@ -1355,7 +1411,7 @@ function startSync(){
   initFB().then(async()=>{
     FB.auth.getRedirectResult().then(r=>{if(r&&r.user&&!r.user.isAnonymous)afterLogin()}).catch(async e=>{
       if(e.code==='auth/credential-already-in-use'&&e.credential){await FB.auth.signInWithCredential(e.credential);afterLogin()}});
-    FB.auth.onAuthStateChanged(()=>{if(tab==='manage'&&!typing())render()});
+    FB.auth.onAuthStateChanged(()=>{if(tab==='me'&&!typing())render()});
     await fbUser().catch(()=>{});
     if(isGoogle()) await pullAcct();
     refreshFriends(true);watchFriends();
@@ -1454,10 +1510,12 @@ async function googleLogout(){
 }
 function acctHTML(){
   const u=FB.auth&&FB.auth.currentUser;
-  if(u&&!u.isAnonymous) return `<div class="panel acct"><div><b>✅ 구글 계정 연결됨</b><div class="sub">${esc(u.email||'')} · 다른 기기에서도 이 계정으로 로그인하면 내 시간표와 친구 목록이 똑같이 보여요.</div></div>
-    <button class="btn small" data-act="logout">로그아웃</button><p class="msg" id="acct-msg"></p></div>`;
-  return `<div class="panel acct"><div><b>구글 계정 연결 <span class="sub">(선택)</span></b><div class="sub">연결하면 폰을 바꾸거나 다른 기기에서도 똑같이 쓸 수 있고, 백업 코드가 필요 없어져요.</div></div>
-    <button class="btn primary small" data-act="login">연결하기</button><p class="msg" id="acct-msg"></p></div>`;
+  if(u&&!u.isAnonymous) return `<details class="panel fold" data-fold="acct"${openAttr('acct',false)}><summary><b>✅ 구글 계정 연결됨</b> <span class="sub">${esc(u.email||'')}</span></summary>
+    <div class="acct"><div class="sub">다른 기기에서도 이 계정으로 로그인하면 내 시간표와 친구 목록이 똑같이 보여요.</div>
+    <button class="btn small" data-act="logout">로그아웃</button><p class="msg" id="acct-msg"></p></div></details>`;
+  return `<details class="panel fold" data-fold="acct"${openAttr('acct',true)}><summary><b>구글 계정 연결</b> <span class="sub">(선택)</span></summary>
+    <div class="acct"><div class="sub">연결하면 폰을 바꾸거나 다른 기기에서도 똑같이 쓸 수 있고, 백업 코드가 필요 없어져요.</div>
+    <button class="btn primary small" data-act="login">연결하기</button><p class="msg" id="acct-msg"></p></div></details>`;
 }
 
 
@@ -1467,7 +1525,7 @@ const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator
 const ua=navigator.userAgent;
 const isIOS=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const inApp=/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(ua);
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(tab==='manage'&&!typing())render()});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(tab==='me'&&!typing())render()});
 window.addEventListener('appinstalled',()=>{installEvt=null;toast('📲 앱으로 설치됐어요! 홈 화면에서 열어주세요');render()});
 function installHTML(){
   if(standalone()) return '';
@@ -1482,6 +1540,51 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostnam
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(e=>console.warn('sw',e)));
 }
 
+
+/* ---------- photo cropper ---------- */
+let crop=null,lastCropImg=null;
+const loadImg=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
+function cropGeom(size){
+  const {img,z}=crop,base=size/Math.min(img.naturalWidth,img.naturalHeight),sc=base*z,k=size/600;
+  const w=img.naturalWidth*sc,h=img.naturalHeight*sc;return{w,h,x:(size-w)/2+crop.ox*k,y:(size-h)/2+crop.oy*k};
+}
+function clampCrop(){const g=cropGeom(600),mx=(g.w-600)/2,my=(g.h-600)/2;crop.ox=Math.max(-mx,Math.min(mx,crop.ox));crop.oy=Math.max(-my,Math.min(my,crop.oy))}
+function drawCrop(){
+  const cv=document.getElementById('cropcv');if(!cv||!crop)return;const x=cv.getContext('2d'),g=cropGeom(600);
+  x.clearRect(0,0,600,600);x.drawImage(crop.img,g.x,g.y,g.w,g.h);
+  x.fillStyle='rgba(10,14,30,.6)';x.beginPath();x.rect(0,0,600,600);x.arc(300,300,296,0,Math.PI*2,true);x.fill('evenodd');
+  x.strokeStyle='rgba(255,255,255,.9)';x.lineWidth=3;x.beginPath();x.arc(300,300,296,0,Math.PI*2);x.stroke();
+}
+function openCropper(img){
+  lastCropImg=img;crop={img,z:1,ox:0,oy:0};
+  const sh=document.getElementById('sheet');
+  sh.innerHTML=`<div class="sheet-card crop-card"><div class="sheet-title">프로필 사진 조정</div>
+    <canvas id="cropcv" width="600" height="600"></canvas>
+    <div class="ce-row zoomrow"><span>🔍−</span><input type="range" id="cropzoom" min="1" max="4" step="0.01" value="1" aria-label="확대"><span>🔍+</span></div>
+    <p class="sub" style="margin:4px 0 0;text-align:center">사진을 끌어서 위치를, 슬라이더나 두 손가락으로 크기를 맞춰요</p>
+    <div class="sheet-acts"><button class="btn" data-act="cropCancel">취소</button><button class="btn primary" data-act="cropSave">저장</button></div></div>`;
+  sh.hidden=false;
+  const cv=sh.querySelector('#cropcv'),zoom=sh.querySelector('#cropzoom'),pts=new Map();
+  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY})});
+  cv.addEventListener('pointermove',e=>{
+    const prev=pts.get(e.pointerId);if(!prev)return;const k=600/cv.getBoundingClientRect().width;
+    if(pts.size===1){crop.ox+=(e.clientX-prev.x)*k;crop.oy+=(e.clientY-prev.y)*k}
+    else{const o=[...pts].find(([id])=>id!==e.pointerId)[1],d0=Math.hypot(prev.x-o.x,prev.y-o.y),d1=Math.hypot(e.clientX-o.x,e.clientY-o.y);
+      if(d0>0){crop.z=Math.min(4,Math.max(1,crop.z*d1/d0));zoom.value=crop.z}}
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});clampCrop();drawCrop();
+  });
+  const up=e=>pts.delete(e.pointerId);cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{e.preventDefault();crop.z=Math.min(4,Math.max(1,crop.z*(e.deltaY<0?1.06:0.94)));zoom.value=crop.z;clampCrop();drawCrop()},{passive:false});
+  zoom.addEventListener('input',()=>{crop.z=+zoom.value;clampCrop();drawCrop()});
+  drawCrop();
+}
+function cropResult(){
+  const S=160,c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d'),g=cropGeom(S);
+  x.imageSmoothingQuality='high';x.drawImage(crop.img,g.x,g.y,g.w,g.h);
+  for(const q of [0.82,0.72,0.62,0.5,0.4]){const d=c.toDataURL('image/jpeg',q);if(d.length<=38000)return d}
+  return null;
+}
+
 /* ---------- events ---------- */
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;editCls=null;render()}});
 const daySel=document.getElementById('daySel');
@@ -1493,12 +1596,14 @@ daySel.addEventListener('change',()=>setLive(false));
 document.getElementById('timeSel').addEventListener('change',()=>setLive(false));
 
 const view=document.getElementById('view');
+view.addEventListener('click',e=>{const sm=e.target.closest('summary'),dt=sm&&sm.parentElement;const k=dt&&dt.dataset.fold;if(k)setTimeout(()=>{state.ui=state.ui||{};state.ui[k]=dt.open;localSave()},0)},true);
 view.addEventListener('click',async e=>{
   const t=e.target.closest('button'); if(!t) return;
   const d=t.dataset;
-  if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
+  if(d.act==='goManage'){tab='me';render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='cropAgain'){const me=meOf();if(!me)return;(lastCropImg?Promise.resolve(lastCropImg):loadImg(me.photo)).then(openCropper).catch(()=>{});return}
   if(d.act==='rmphoto'){const me=meOf();if(me){delete me.photo;save();flushPublish();render()}return}
   if(d.icsdl){const file=icsFile(d.icsdl),a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);const m=document.getElementById('icsmsg-'+d.icsdl);if(m){m.className='msg ok';m.textContent='파일을 만들었어요. 열면 캘린더에 추가할 수 있어요.'}return}
@@ -1509,7 +1614,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='logout'){googleLogout();return}
   if(d.act==='syncNow'){const me=meOf();if(me)me.pubKey='';setSync('saving');await publishMe();refreshFriends(true);render();return}
   if(d.setme){const f=state.friends.find(x=>x.id===d.setme);f.isMe=true;f.uid=f.uid||uid();
-    state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;save();render();return}
+    state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;tab='me';save();render();return}
   if(d.cedit){editCls=d.cedit;render();const el=document.querySelector(`[data-ced="${d.cedit}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.querySelector('.ce-course');if(d.cedit.endsWith(':new'))i.focus()}return}
   if(d.wk!==undefined){weekOff=d.wk==='0'?0:weekOff+(+d.wk);render();return}
   if(d.rep&&t.closest('.ced')){const box=t.closest('.ced');box.dataset.rep=d.rep;box.querySelectorAll('[data-rep]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
@@ -1581,6 +1686,7 @@ view.addEventListener('click',async e=>{
   if(d.toggle){editCls=null;openId=openId===d.toggle?null:d.toggle;render();return}
   if(d.parse||d.parseReplace){
     const id=d.parse||d.parseReplace, f=state.friends.find(x=>x.id===id);
+    state.ui=state.ui||{};state.ui['imp-'+id]=true;
     const txt=document.getElementById('paste-'+id).value;
     if(/BEGIN:VCALENDAR/i.test(txt)){if(d.parseReplace)f.classes=[];importICSInto(id,txt);return}
     const got=parseTimetable(txt);
@@ -1605,8 +1711,8 @@ view.addEventListener('click',async e=>{
 view.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.avatar&&t.files&&t.files[0]){
-    const f=state.friends.find(x=>x.id===t.dataset.avatar),file=t.files[0];t.value='';
-    makeAvatar(file).then(d=>{if(!d){toast('사진을 줄이지 못했어요. 다른 사진으로 해볼래요?');return}f.photo=d;save();flushPublish();render();toast('프로필 사진을 바꿨어요')}).catch(()=>toast('이 사진은 열 수 없어요'));
+    const file=t.files[0];t.value='';const url=URL.createObjectURL(file);
+    loadImg(url).then(img=>openCropper(img)).catch(()=>toast('이 사진은 열 수 없어요'));
     return;
   }
   if(t.dataset.photo&&t.files&&t.files[0]){readPhoto(t.dataset.photo,t.files[0]);t.value='';return}
@@ -1629,12 +1735,15 @@ function toggleBlk(d){
 }
 document.getElementById('sheet').addEventListener('click',e=>{
   const sh=e.currentTarget,t=e.target.closest('button');
+  if(t&&t.dataset.act==='cropCancel'){sh.hidden=true;crop=null;return}
+  if(t&&t.dataset.act==='cropSave'){const me=meOf(),d=crop&&cropResult();if(me&&d){me.photo=d;save();flushPublish();render();toast('프로필 사진을 바꿨어요')}else toast('사진을 저장하지 못했어요');sh.hidden=true;crop=null;return}
+  if(e.target.id==='sheet'&&crop) return; // don't lose the crop by tapping outside
   if(e.target.id==='sheet'||(t&&t.dataset.act==='sheetClose')){sh.hidden=true;return}
   if(t&&(t.dataset.skip!==undefined||t.dataset.offb!==undefined)) toggleBlk(t.dataset);
 });
 load(); render(); checkHash(); startSync(); netBadge();
 window.addEventListener('hashchange',()=>checkHash());
-setInterval(()=>{if(live&&tab!=='manage'&&!typing())render()},30000);
+setInterval(()=>{if(live&&tab!=='manage'&&tab!=='me'&&!typing())render()},30000);
 </script>
 </body>
 </html>
