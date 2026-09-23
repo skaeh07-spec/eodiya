@@ -35,9 +35,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);
   font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   font-size:15px;line-height:1.55;
-  background-image:radial-gradient(circle at 12% -10%,color-mix(in srgb,var(--sun) 35%,transparent) 0,transparent 38%),
-                   radial-gradient(circle at 100% 0,color-mix(in srgb,var(--accent) 22%,transparent) 0,transparent 40%);
-  background-attachment:fixed;min-height:100vh}
+  min-height:100vh}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -60,13 +58,13 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .hint{color:var(--muted);font-size:14px;margin:0 0 12px}
 
 /* now board */
-.board{display:grid;gap:10px}
-.row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:14px;border-radius:18px;
-  background:color-mix(in srgb,var(--fc) 9%,var(--panel));border:1.5px solid color-mix(in srgb,var(--fc) 25%,transparent)}
-.avatar{width:46px;height:46px;border-radius:15px;background:var(--fc);color:#fff;display:grid;place-items:center;
-  font-family:"Do Hyeon",sans-serif;font-size:22px}
-.who{font-weight:700;font-size:15px;color:var(--muted)}
-.where{font-family:"Do Hyeon",sans-serif;font-size:27px;line-height:1.15}
+.board{display:grid}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.avatar{width:42px;height:42px;border-radius:50%;background:var(--fc);color:#fff;display:grid;place-items:center;
+  font-weight:700;font-size:17px}
+.who{font-weight:500;font-size:13.5px;color:var(--muted)}
+.where{font-weight:700;font-size:19px;line-height:1.3}
 .sub{color:var(--muted);font-size:13.5px}
 .badge{font-size:13px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap}
 .badge.free{color:var(--on-status);background:var(--free)}
@@ -81,15 +79,45 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 
 /* grid */
 .gridscroll{overflow-x:auto}
-.grid{display:grid;min-width:470px;position:relative}
+.grid{display:grid;position:relative}
+.weekv{min-width:0}
 .gh{font-size:13px;font-weight:700;text-align:center;padding:6px 0 8px}
 .gh.today span{background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 10px}
 .tcol{position:relative}
 .tcol span{position:absolute;right:6px;font-size:11px;color:var(--muted);transform:translateY(-50%)}
 .dcol{position:relative;background:var(--soft);border-radius:12px;margin:0 2px}
 .hline{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
-.blk{position:absolute;border-radius:9px;padding:4px 6px;font-size:11px;line-height:1.25;overflow:hidden;color:#fff}
-.blk b{display:block;font-size:11.5px}
+.blk{position:absolute;border:none;border-radius:8px;padding:4px 6px;font-size:11px;line-height:1.25;overflow:hidden;color:#fff;background:var(--fc);text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:1px;cursor:pointer}
+.weekv .blk{padding:3px 4px}
+.weekv .blk b{font-size:10.5px;font-weight:700;width:100%}
+.weekv .blk .w{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.weekv .blk.narrow{padding:3px 2px}
+.weekv .blk.narrow b{font-size:9px;letter-spacing:-.2px}
+.dayv .blk{padding:6px 9px}
+.dayv .blk b{font-size:14px}
+.dayv .blk span{font-size:12px;opacity:.92}
+.dayv .blk .bwho{font-weight:700;opacity:1;margin-top:auto}
+.gtop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.gtop .chips{margin-bottom:10px}
+.seg{display:inline-flex;background:var(--soft);border-radius:12px;padding:3px;margin-bottom:10px}
+.seg button{border:none;background:transparent;border-radius:9px;padding:5px 12px;font-size:13.5px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.daytabs{display:flex;gap:4px;margin-bottom:12px}
+.daytabs button{flex:1;border:none;background:var(--soft);border-radius:12px;padding:8px 0;font-weight:500;position:relative}
+.daytabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.daytabs i{position:absolute;top:5px;right:calc(50% - 14px);width:5px;height:5px;border-radius:50%;background:var(--busy)}
+#sheet{position:fixed;inset:0;z-index:20;background:rgba(10,14,30,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px calc(12px + env(safe-area-inset-bottom,0px))}
+#sheet[hidden]{display:none}
+.sheet-card{background:var(--panel);width:100%;max-width:440px;border-radius:22px;padding:18px;box-shadow:var(--shadow);border-top:5px solid var(--fc)}
+.sheet-who{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.sheet-who .dot{background:var(--fc)}
+.sheet-title{font-size:22px;font-weight:700;margin:4px 0 8px}
+.sheet-title small{font-size:13px;color:var(--muted);font-weight:500}
+.sheet-row{font-size:15px;margin:3px 0}
+.linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
+details.backup summary{cursor:pointer;font-weight:700;list-style:none}
+details.backup summary::after{content:" ▾";color:var(--muted)}
+details.backup[open] summary{margin-bottom:8px}
 .nowline{position:absolute;left:-2px;right:-2px;border-top:2.5px solid var(--busy);z-index:3}
 .nowline::before{content:"";position:absolute;left:-4px;top:-6px;width:9px;height:9px;border-radius:50%;background:var(--busy)}
 
@@ -102,17 +130,21 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .none{color:var(--muted);font-size:14px}
 
 /* manage */
-.friend{background:var(--panel);border-radius:20px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow);border-left:6px solid var(--fc)}
+.friend{background:var(--panel);border-radius:18px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
 .fhead{display:flex;align-items:center;gap:10px;padding:10px 12px}
 .fhead input[type=text]{flex:1;min-width:0;border:1px solid transparent;background:transparent;font-weight:700;font-size:17px;padding:4px 6px;border-radius:10px}
 .fhead input[type=text]:hover,.fhead input[type=text]:focus{border-color:var(--line);background:var(--soft)}
-.fhead input[type=color]{width:32px;height:32px;border:none;padding:0;background:none;border-radius:10px}
+.fhead input[type=color]{width:24px;height:24px;border:none;padding:0;background:none;border-radius:50%;overflow:hidden;-webkit-appearance:none;appearance:none;cursor:pointer;flex:none}
+.fhead input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.fhead input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
+.fhead input[type=color]::-moz-color-swatch{border:none;border-radius:50%}
 .fbody{padding:4px 14px 14px}
 textarea{width:100%;min-height:110px;border:1.5px solid var(--line);border-radius:14px;background:var(--soft);padding:10px;font-size:13.5px;resize:vertical}
 .btn{border:none;background:var(--soft);border-radius:12px;padding:9px 15px;font-weight:500}
 .btn.primary{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .btn.sunny{background:var(--sun);color:#1A1F36;font-weight:700}
 .btn.danger{color:var(--busy)}
+.btn.armed{background:var(--busy);color:#fff;font-weight:700}
 .btn.small{padding:5px 11px;font-size:13px}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -122,13 +154,13 @@ th{color:var(--muted);font-weight:500;font-size:12.5px}
 .manual{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr 1fr auto;gap:6px;margin-top:10px}
 .manual input{border:none;background:var(--soft);border-radius:10px;padding:7px 9px;min-width:0}
 .backup{margin-top:18px}
-h2.sec{font-family:"Do Hyeon",sans-serif;font-weight:400;font-size:24px;margin:20px 4px 10px}
+h2.sec{font-size:17px;font-weight:700;margin:22px 4px 10px;color:var(--muted)}
 h2.sec:first-child{margin-top:4px}
 .field{flex:1;min-width:160px;border:none;background:var(--soft);border-radius:12px;padding:9px 12px}
-.mebadge{display:inline-block;background:var(--fc);color:#fff;border-radius:8px;padding:0 7px;font-size:12px}
+.mebadge{display:inline-block;background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:0 7px;font-size:12px}
 .sharebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:0 14px 12px}
 .addbox{margin-bottom:12px}
-.invite{text-align:center;margin-bottom:14px;border:2px solid var(--sun)}
+.invite{text-align:center;margin-bottom:14px;border:2px solid var(--accent)}
 .invite .big{font-size:40px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .backup h2{font-size:17px;margin:0 0 4px}
@@ -148,7 +180,7 @@ label.btn.photo{display:inline-block;cursor:pointer}
 details.help summary{cursor:pointer;color:var(--muted);font-size:13.5px}
 details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;padding:10px;font-size:12.5px;overflow-x:auto}
 @media (prefers-reduced-motion:no-preference){
-  .row,.slot,.blk{animation:pop .25s ease-out both}
+  .row,.slot{animation:pop .2s ease-out both}
   @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 }
 </style>
@@ -172,6 +204,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
   </nav>
 
   <main id="view"></main>
+  <div id="sheet" hidden></div>
 </div>
 
 <script>
@@ -277,21 +310,21 @@ function selected(){
   if(!sel) sel=new Set(state.friends.map(f=>f.id));
   return state.friends.filter(f=>sel.has(f.id));
 }
-function chipsHTML(){
+function chipsHTML(onlyWith){
   if(!sel) sel=new Set(state.friends.map(f=>f.id));
-  return '<div class="chips">'+state.friends.map(f=>
+  return '<div class="chips">'+state.friends.filter(f=>!onlyWith||f.classes.length).map(f=>
     `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot"></span>${esc(label(f))}</button>`).join('')+'</div>';
 }
 
 
 /* ---------- backup ---------- */
 function backupHTML(){
-  return `<div class="panel backup"><h2>백업 · 공유</h2>
+  return `<details class="panel backup"><summary>백업 · 복원</summary>
   <p class="hint">친구 목록을 코드로 내보내요. 메모장에 저장해 두거나 친구한테 보내면, 다른 폰에서 "코드 불러오기"로 그대로 가져올 수 있어요.</p>
   <div class="actions"><button class="btn primary" data-act="export" ${state.friends.length?'':'disabled'}>백업 코드 복사</button></div>
   <textarea id="bk-box" placeholder="여기에 백업 코드를 붙여넣으세요" style="min-height:80px"></textarea>
   <div class="actions"><button class="btn" data-act="importMerge">코드 불러와서 합치기</button><button class="btn danger" data-act="importReplace">지금 목록 지우고 불러오기</button></div>
-  <p class="msg" id="bk-msg"></p></div>`;
+  <p class="msg" id="bk-msg"></p></details>`;
 }
 function exportCode(){
   const data=state.friends.map(f=>Object.assign(packPerson(f),f.isMe?{me:1}:{}));
@@ -313,14 +346,46 @@ function unpackPerson(o){
   return{id:uid(),uid:o.u||null,name:String(o.n||'친구').slice(0,30),color:/^#[0-9a-f]{6}$/i.test(o.c)?o.c:PALETTE[0],
     classes:(o.k||[]).map(k=>({id:uid(),course:String(k[0]),type:String(k[1]||''),days:String(k[2]).split('').map(Number).filter(n=>n>=0&&n<7),start:+k[3],end:+k[4],loc:String(k[5]||'')})).filter(c=>c.days.length&&c.end>c.start)};
 }
-function shareLink(){
-  const me=meOf();
-  return location.origin+location.pathname+'#add='+b64u(JSON.stringify(packPerson(me)));
+/* compact v2: fields joined by | and ~, then deflate + base64url */
+const TY2={LEC:'L',TUT:'T',LAB:'B',SEM:'S',TST:'X'},TY2R=Object.fromEntries(Object.entries(TY2).map(([a,b])=>[b,a]));
+const clean2=v=>String(v).replace(/[|~]/g,' ');
+function packV2(f){
+  return ['2',clean2(f.uid||''),clean2(f.name),f.color.replace('#',''),
+    ...f.classes.map(c=>[clean2(c.course),TY2[c.type]||clean2(c.type),c.days.reduce((m,d)=>m|1<<d,0).toString(36),
+      Math.round(c.start/5).toString(36),Math.round(c.end/5).toString(36),clean2(c.loc)].join('~'))].join('|');
 }
-function personFromText(text){
-  const m=String(text).match(/#add=([A-Za-z0-9_-]+)/);
-  if(!m) return null;
-  return unpackPerson(JSON.parse(unb64u(m[1])));
+function unpackV2(str){
+  const [v,u,n,col,...cs]=str.split('|'); if(v!=='2') throw new Error('ver');
+  return unpackPerson({u,n,c:'#'+col,k:cs.map(x=>{const [co,ty,dm,st,en,lo]=x.split('~');const m=parseInt(dm,36);
+    return [co,TY2R[ty]||ty,[0,1,2,3,4,5,6].filter(d=>m&(1<<d)).join(''),parseInt(st,36)*5,parseInt(en,36)*5,lo||'']})});
+}
+const bytesToB64u=b=>{let s='';for(let i=0;i<b.length;i+=8192)s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const b64uToBytes=str=>{str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%4)str+='=';const bin=atob(str);return Uint8Array.from(bin,c=>c.charCodeAt(0))};
+const streamBytes=(bytes,t)=>new Response(new Blob([bytes]).stream().pipeThrough(t)).arrayBuffer().then(b=>new Uint8Array(b));
+async function encodeShare(str){
+  const raw=new TextEncoder().encode(str);
+  if(window.CompressionStream){try{return 'z'+bytesToB64u(await streamBytes(raw,new CompressionStream('deflate-raw')))}catch(e){}}
+  return 'p'+bytesToB64u(raw);
+}
+async function decodeShare(code){
+  const bytes=b64uToBytes(code.slice(1));
+  const out=code[0]==='z'?await streamBytes(bytes,new DecompressionStream('deflate-raw')):bytes;
+  return new TextDecoder().decode(out);
+}
+let shareCache={key:'',link:''};
+async function shareLink(){
+  const me=meOf(),key=packV2(me);
+  if(shareCache.key===key) return shareCache.link;
+  const link=location.origin+location.pathname+'#a='+await encodeShare(key);
+  shareCache={key,link};return link;
+}
+async function personFromText(text){
+  text=String(text);
+  const m2=text.match(/#a=([zp][A-Za-z0-9_-]+)/);
+  if(m2) return unpackV2(await decodeShare(m2[1]));
+  const m=text.match(/#add=([A-Za-z0-9_-]+)/);
+  if(m) return unpackPerson(JSON.parse(unb64u(m[1])));
+  return null;
 }
 function addPerson(p){
   const me=meOf();
@@ -340,11 +405,12 @@ function pendingHTML(){
     <div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendYes">${ex?'업데이트':'추가하기'}</button><button class="btn" data-act="pendNo">취소</button></div>
     <p class="sub">홈 화면에 추가한 앱을 쓰고 있다면, 받은 메시지를 복사해서 앱의 친구 관리 → "친구 추가"에 붙여넣어 주세요. 브라우저와 앱은 저장 공간이 따로예요.</p></div>`;
 }
-function checkHash(){
-  if(!location.hash.startsWith('#add=')) return;
-  try{pending=personFromText(location.hash)}catch(e){pending=null}
+async function checkHash(){
+  if(!/^#a(dd)?=/.test(location.hash)) return;
+  const h=location.hash;
   history.replaceState(null,'',location.pathname+location.search);
-  if(pending) tab='now';
+  try{pending=await personFromText(h)}catch(e){pending=null}
+  if(pending){tab='now';render()}
 }
 
 /* ---------- views ---------- */
@@ -357,7 +423,7 @@ function emptyHTML(){
 function viewNow(){
   if(!others().length) return emptyHTML();
   const r=ref();
-  const rows=others().map(f=>{
+  const rows=others().filter(f=>f.classes.length).map(f=>{
     const s=statusOf(f,r); let where,sub,badge;
     if(s.busy){
       where=esc(s.cur.loc||'강의실 미정');
@@ -375,41 +441,72 @@ function viewNow(){
   rows.sort((a,b)=>(a.s.busy-b.s.busy));
   return `<div class="panel"><p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준${live?' · 자동으로 갱신돼요':''}</p><div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
 }
+let gridMode=null, gridDay=null, blkInfo=[];
+function layoutDay(items){
+  items.sort((a,b)=>a.s-b.s||b.e-a.e);
+  let group=[],lanes=[],gEnd=-1;
+  const flush=()=>{group.forEach(it=>it.n=lanes.length);group=[];lanes=[];gEnd=-1};
+  items.forEach(it=>{
+    if(group.length&&it.s>=gEnd) flush();
+    let li=lanes.findIndex(e=>e<=it.s); if(li<0){li=lanes.length;lanes.push(0)}
+    lanes[li]=it.e;it.lane=li;group.push(it);gEnd=Math.max(gEnd,it.e);
+  });
+  flush();return items;
+}
 function viewGrid(){
   if(!state.friends.length) return emptyHTML();
-  const fs=selected(); const r=ref();
+  const fs=selected().filter(f=>f.classes.length); const r=ref();
+  if(!gridMode) gridMode=window.innerWidth<640?'day':'week';
   const all=state.friends.flatMap(f=>f.classes);
   const days=[0,1,2,3,4].concat([5,6].filter(d=>all.some(c=>c.days.includes(d))));
-  let lo=START,hi=18*60;
+  if(gridDay===null||!days.includes(gridDay)) gridDay=days.includes(r.day)?r.day:0;
+  let lo=9*60,hi=17*60;
   all.forEach(c=>{lo=Math.min(lo,Math.floor(c.start/60)*60);hi=Math.max(hi,Math.ceil(c.end/60)*60)});
-  const PX=0.8, H=(hi-lo)*PX;
-  let h=`<div class="grid" style="grid-template-columns:44px repeat(${days.length},1fr)"><div></div>`;
-  days.forEach(d=>h+=`<div class="gh ${live&&d===r.day?'today':''}"><span>${DAYS[d]}</span></div>`);
+  const dayMode=gridMode==='day', PX=dayMode?1.15:0.85, H=(hi-lo)*PX, shown=dayMode?[gridDay]:days;
+  const many=fs.length>1;
+  blkInfo=[];
+  let h=`<div class="gtop">${chipsHTML(true)}<div class="seg"><button data-gmode="day" aria-pressed="${dayMode}">하루</button><button data-gmode="week" aria-pressed="${!dayMode}">주간</button></div></div>`;
+  if(dayMode) h+=`<div class="daytabs">${days.map(d=>`<button data-gday="${d}" aria-pressed="${d===gridDay}">${DAYS[d]}${live&&d===r.day?'<i></i>':''}</button>`).join('')}</div>`;
+  h+=`<div class="grid ${dayMode?'dayv':'weekv'}" style="grid-template-columns:34px repeat(${shown.length},1fr)"><div></div>`;
+  shown.forEach(d=>h+=dayMode?'<div></div>':`<div class="gh ${live&&d===r.day?'today':''}"><span>${DAYS[d]}</span></div>`);
   h+=`<div class="tcol" style="height:${H}px">`;
   for(let t=lo;t<=hi;t+=60) h+=`<span style="top:${(t-lo)*PX}px">${t/60}</span>`;
   h+='</div>';
-  days.forEach(d=>{
+  shown.forEach(d=>{
     h+=`<div class="dcol" style="height:${H}px">`;
     for(let t=lo+60;t<hi;t+=60) h+=`<div class="hline" style="top:${(t-lo)*PX}px"></div>`;
-    fs.forEach((f,i)=>{
-      const w=100/fs.length;
-      classesOn(f,d).forEach(c=>{
-        h+=`<div class="blk" title="${esc(label(f))} · ${esc(c.course)} ${fmt(c.start)}–${fmt(c.end)} ${esc(c.loc)}" style="top:${(c.start-lo)*PX}px;height:${(c.end-c.start)*PX-2}px;left:calc(${i*w}% + 2px);width:calc(${w}% - 4px);background:${f.color}">
-          <b>${esc(c.course)}</b>${esc(c.loc)}</div>`;
-      });
+    const items=layoutDay(fs.flatMap(f=>classesOn(f,d).map(c=>({f,c,s:c.start,e:c.end}))));
+    items.forEach(it=>{
+      const {f,c}=it,w=100/it.n,ht=(c.end-c.start)*PX-3,idx=blkInfo.push({f,c,d})-1;
+      const wide=dayMode&&it.n<=2;
+      const words=esc(c.course).split(/\s+/).map(w=>`<span class="w">${w}</span>`).join('');
+      h+=`<button class="blk${!dayMode&&it.n>1?' narrow':''}" data-blk="${idx}" style="top:${(c.start-lo)*PX+1}px;height:${ht}px;left:calc(${it.lane*w}% + 2px);width:calc(${w}% - 4px);--fc:${f.color}">
+        <b>${dayMode?esc(c.course):words}</b>${wide?`<span>${fmt(c.start)}–${fmt(c.end)}${c.loc?' · '+esc(c.loc):''}</span>${many?`<span class="bwho">${esc(label(f))}</span>`:''}`:''}</button>`;
     });
-    if(d===r.day&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
+    if(d===r.day&&live&&r.min>=lo&&r.min<=hi) h+=`<div class="nowline" style="top:${(r.min-lo)*PX}px"></div>`;
     h+='</div>';
   });
   h+='</div>';
-  return `<div class="panel">${chipsHTML()}<div class="gridscroll">${h}</div></div>`;
+  if(!fs.length) h+='<p class="none" style="margin-top:10px">시간표가 입력된 사람이 없어요.</p>';
+  else if(!dayMode) h+='<p class="hint" style="margin:10px 0 0">칸을 누르면 시간이랑 강의실이 나와요.</p>';
+  return `<div class="panel">${h}</div>`;
+}
+function sheetHTML(i){
+  const b=blkInfo[i]; if(!b) return '';
+  const {f,c}=b;
+  return `<div class="sheet-card" style="--fc:${f.color}"><div class="sheet-who"><span class="dot"></span>${esc(label(f))}</div>
+    <div class="sheet-title">${esc(c.course)} <small>${esc(c.type)}</small></div>
+    <div class="sheet-row">🕘 ${c.days.map(x=>DAYS[x]).join('')} ${fmt(c.start)}–${fmt(c.end)}</div>
+    <div class="sheet-row">📍 ${esc(c.loc||'강의실 미정')}</div>
+    <button class="btn" data-act="sheetClose" style="width:100%;margin-top:12px">닫기</button></div>`;
 }
 function viewFree(){
   if(!state.friends.length) return emptyHTML();
-  const fs=selected(); const r=ref();
+  let fs=selected(); const r=ref();
   const all=state.friends.flatMap(f=>f.classes);
   const days=[0,1,2,3,4].concat([5,6].filter(d=>all.some(c=>c.days.includes(d))));
-  let h=`<div class="panel">${chipsHTML()}<p class="hint">선택한 친구들이 모두 수업 없는 시간이에요 (${fmt(START)}–${fmt(END)}, ${MIN_FREE}분 이상).</p>`;
+  let h=`<div class="panel">${chipsHTML(true)}<p class="hint">선택한 친구들이 모두 수업 없는 시간이에요 (${fmt(START)}–${fmt(END)}, ${MIN_FREE}분 이상).</p>`;
+  fs=fs.filter(f=>f.classes.length);
   if(!fs.length) return h+'<p class="none">위에서 친구를 한 명 이상 골라주세요.</p></div>';
   days.forEach(d=>{
     const slots=freeSlots(fs,d);
@@ -423,12 +520,13 @@ function viewManage(){
   let h=`<h2 class="sec">내 시간표</h2>`;
   if(!me){
     h+=`<div class="panel mecta"><p>이름을 적고 내 시간표를 만들어요. 한 번만 입력해 두면 친구들한테 링크로 보낼 수 있어요.</p>
-      <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div></div>`;
+      <div class="actions"><input id="me-name" class="field" placeholder="내 이름 (예: 도건)"><button class="btn primary" data-act="makeMe">만들기</button></div>
+      ${others().some(f=>f.classes.length)?`<p class="hint" style="margin-top:6px">이미 친구 목록에 내 시간표를 넣어뒀다면, 눌러서 내 시간표로 바꾸세요.</p><div class="actions">${others().filter(f=>f.classes.length).map(f=>`<button class="btn small" data-setme="${f.id}"><span class="dot" style="background:${f.color}"></span> ${esc(f.name)}</button>`).join('')}</div>`:''}</div>`;
   } else h+=friendCard(me);
   h+=`<h2 class="sec">친구</h2>
-  <div class="panel addbox"><p class="hint">친구한테 받은 공유 메시지나 링크를 통째로 붙여넣으세요.</p>
-    <textarea id="add-box" style="min-height:70px" placeholder="예: 도건의 시간표야! … https://…#add=…"></textarea>
-    <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="btn" data-act="add">직접 입력해서 추가</button>${state.friends.length?'':'<button class="btn sunny" data-act="demo">예시 넣기</button>'}</div>
+  <div class="panel addbox"><p class="hint">친구가 보낸 공유 메시지를 붙여넣으세요.</p>
+    <textarea id="add-box" style="min-height:70px" placeholder="도건의 시간표 📍 https://…"></textarea>
+    <div class="actions"><button class="btn primary" data-act="addCode">친구 추가</button><button class="linkbtn" data-act="add">또는 직접 입력하기</button></div>
     <p class="msg" id="add-msg"></p></div>`;
   others().forEach(f=>h+=friendCard(f));
   return h+backupHTML();
@@ -477,6 +575,7 @@ function render(){
   syncClock();
   document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
   const v=document.getElementById('view');
+  if(meOf()&&meOf().classes.length) shareLink().catch(()=>{});
   v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():viewManage());
 }
 
@@ -632,6 +731,16 @@ async function readPhoto(id,file){
   }finally{ if(worker) worker.terminate().catch(()=>{}) }
 }
 
+
+/* two-tap confirm (works where confirm() popups are blocked) */
+let armed=null;
+function armed2(btn,key,text){
+  if(armed&&armed.key===key&&Date.now()-armed.t<4000){armed=null;return true}
+  armed={key,t:Date.now()};
+  const orig=btn.textContent;btn.textContent=text;btn.classList.add('armed');
+  setTimeout(()=>{if(btn.isConnected&&btn.classList.contains('armed')){btn.textContent=orig;btn.classList.remove('armed')}},4000);
+  return false;
+}
 /* ---------- events ---------- */
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;render()}});
 const daySel=document.getElementById('daySel');
@@ -642,19 +751,24 @@ daySel.addEventListener('change',()=>setLive(false));
 document.getElementById('timeSel').addEventListener('change',()=>setLive(false));
 
 const view=document.getElementById('view');
-view.addEventListener('click',e=>{
+view.addEventListener('click',async e=>{
   const t=e.target.closest('button'); if(!t) return;
   const d=t.dataset;
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.setme){const f=state.friends.find(x=>x.id===d.setme);f.isMe=true;f.uid=f.uid||uid();
+    state.friends=[f,...state.friends.filter(x=>x!==f)];openId=null;save();render();return}
+  if(d.gmode){gridMode=d.gmode;render();return}
+  if(d.gday!==undefined){gridDay=+d.gday;render();return}
+  if(d.blk!==undefined){const sh=document.getElementById('sheet');sh.innerHTML=sheetHTML(+d.blk);sh.hidden=false;return}
   if(d.act==='makeMe'){
     const name=(document.getElementById('me-name').value||'').trim()||'나';
-    const me={id:uid(),uid:'u'+uid()+uid(),isMe:true,name,color:PALETTE[0],classes:[]};
+    const me={id:uid(),uid:uid(),isMe:true,name,color:PALETTE[0],classes:[]};
     state.friends.unshift(me);openId=me.id;sel&&sel.add(me.id);save();render();return;
   }
   if(d.act==='share'){
-    const me=meOf(),link=shareLink(),text=`${me.name}의 시간표야! 눌러서 '어디야?'에 추가해줘 📍\n${link}`;
+    const me=meOf(),link=shareCache.key===packV2(me)?shareCache.link:await shareLink(),text=`${me.name}의 시간표 📍\n${link}`;
     const m=document.getElementById('share-msg');
     const copied=()=>{m.textContent='공유 메시지를 복사했어요. 카톡에 붙여넣어 보내세요.'};
     if(navigator.share){navigator.share({title:'어디야? 시간표',text}).catch(()=>{});return}
@@ -664,7 +778,7 @@ view.addEventListener('click',e=>{
   }
   if(d.act==='addCode'){
     const m=document.getElementById('add-msg');
-    let p=null;try{p=personFromText(document.getElementById('add-box').value)}catch(e){}
+    let p=null;try{p=await personFromText(document.getElementById('add-box').value)}catch(e){}
     if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지 전체(#add= 가 들어간 링크 포함)를 붙여넣어 주세요.';return}
     const r=addPerson(p);render();
     const m2=document.getElementById('add-msg');m2.className='msg '+(r.kind==='me'?'err':'ok');
@@ -685,7 +799,7 @@ view.addEventListener('click',e=>{
     const m=document.getElementById('bk-msg');
     try{
       const got=importCode(document.getElementById('bk-box').value);
-      if(d.act==='importReplace'&&!confirm('지금 친구 목록을 지우고 코드 내용으로 바꿀까요?')) return;
+      if(d.act==='importReplace'&&!armed2(t,'imp','한 번 더 누르면 바꿔요')) return;
       state.friends=d.act==='importReplace'?got:state.friends.concat(got);
       sel=null;save();render();
       const m2=document.getElementById('bk-msg');m2.className='msg ok';m2.textContent=`친구 ${got.length}명을 불러왔어요.`;
@@ -713,7 +827,7 @@ view.addEventListener('click',e=>{
     f.classes.push({id:uid(),course:g('course')||'수업',type:'',days,start:s,end:en2,loc:g('loc')});save();render();return;
   }
   if(d.delc){const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
-  if(d.delf){const f=state.friends.find(x=>x.id===d.delf);if(confirm(`${f.name}을(를) 삭제할까요?`)){state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);save();render()}return}
+  if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();return}
 });
 view.addEventListener('change',e=>{
   const t=e.target;
@@ -727,8 +841,9 @@ function addFriend(){
   const inp=document.querySelector(`[data-name="${f.id}"]`);if(inp){inp.focus();inp.select()}
 }
 
-load(); checkHash(); render();
-window.addEventListener('hashchange',()=>{checkHash();render()});
+document.getElementById('sheet').addEventListener('click',e=>{if(e.target.id==='sheet'||e.target.closest('[data-act=sheetClose]'))e.currentTarget.hidden=true});
+load(); render(); checkHash();
+window.addEventListener('hashchange',()=>checkHash());
 setInterval(()=>{if(live&&tab!=='manage')render()},30000);
 </script>
 </body>
