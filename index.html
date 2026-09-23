@@ -174,6 +174,13 @@ nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accen
 .install>div{flex:1;min-width:200px}
 .expbox{margin-top:14px;background:var(--soft);border-radius:16px;padding:12px}
 .expbox input[type=date]{border:none;background:var(--panel);border-radius:10px;padding:7px 9px}
+.avatar{overflow:hidden;flex:none}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar.sm{width:34px;height:34px;border-radius:50%;background:var(--fc);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+.avatar.xs{width:20px;height:20px;border-radius:50%;background:var(--fc);color:#fff;display:inline-grid;place-items:center;font-weight:700;font-size:10px}
+.chip .avatar.xs{margin-left:-3px}
+.avpick{position:relative;cursor:pointer;flex:none}
+.avcam{position:absolute;right:-4px;bottom:-4px;font-size:11px;background:var(--panel);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .linkbtn{padding:0 4px;font-size:12.5px}
 .linkbtn{border:none;background:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px 4px}
 details.backup summary{cursor:pointer;font-weight:700;list-style:none}
@@ -271,7 +278,7 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0924-4';
+const APP_VER='0924-5';
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -281,6 +288,24 @@ let tab='now', live=true, sel=null, openId=null, pending=null, pendingErr=null;
 const meOf=()=>state.friends.find(f=>f.isMe);
 const others=()=>state.friends.filter(f=>!f.isMe);
 const dn=f=>f.nick||f.name;
+const PHOTO_RE=/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const okPhoto=v=>typeof v==='string'&&v.length<=40000&&PHOTO_RE.test(v)?v:undefined;
+const phash=v=>v?v.length+':'+v.slice(-24):'';
+function avatarHTML(f,cls='avatar'){
+  const ph=okPhoto(f.photo);
+  return `<span class="${cls}" style="--fc:${f.color}">${ph?`<img src="${ph}" alt="">`:esc([...(f.isMe?f.name:dn(f))][0]||'?')}</span>`;
+}
+async function makeAvatar(file){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});
+    const S=160,c=document.createElement('canvas');c.width=c.height=S;
+    const side=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-side)/2,sy=(img.naturalHeight-side)/2;
+    const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(img,sx,sy,side,side,0,0,S,S);
+    for(const q of [0.8,0.7,0.6,0.5,0.4]){const d=c.toDataURL('image/jpeg',q);if(d.length<=38000)return d}
+    return null;
+  }finally{URL.revokeObjectURL(url)}
+}
 const label=f=>f.isMe?'나':dn(f);
 
 function load(){try{const s=localStorage.getItem('eodiya');if(s)state=JSON.parse(s)}catch(e){} if(!state||!Array.isArray(state.friends))state={friends:[]}
@@ -486,7 +511,7 @@ function selected(){
 function chipsHTML(onlyWith){
   if(!sel) sel=new Set(state.friends.map(f=>f.id));
   return '<div class="chips">'+state.friends.filter(f=>!onlyWith||f.classes.length).map(f=>
-    `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}"><span class="dot"></span>${esc(label(f))}</button>`).join('')+'</div>';
+    `<button class="chip" style="--fc:${f.color}" data-chip="${f.id}" aria-pressed="${sel.has(f.id)}">${f.photo?avatarHTML(f,'avatar xs'):'<span class="dot"></span>'}${esc(label(f))}</button>`).join('')+'</div>';
 }
 
 
@@ -790,7 +815,7 @@ function addPerson(p){
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
   if(me&&p.code&&me.code===p.code) return {kind:'me'};
   const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
-  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();if(p.code)watchFriends();return{kind:'updated',f:ex}}
+  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.photo!==undefined)ex.photo=p.photo;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();if(p.code)watchFriends();return{kind:'updated',f:ex}}
   p.color=PALETTE[state.friends.length%PALETTE.length];
   state.friends.push(p);sel&&sel.add(p.id);save();if(p.code)watchFriends();return{kind:'added',f:p};
 }
@@ -842,7 +867,7 @@ function viewNow(){
         badge=`<span class="badge free">비어있음</span>`;
       }
     }
-    return {s,html:`<div class="row" style="--fc:${f.color}"><span class="avatar">${esc([...dn(f)][0]||'?')}</span>
+    return {s,html:`<div class="row" style="--fc:${f.color}">${avatarHTML(f)}
       <div><div class="who">${esc(dn(f))}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
   });
   rows.sort((a,b)=>(a.s.busy-b.s.busy));
@@ -905,7 +930,7 @@ function blkFrom(i){const [fid,cid,d,off]=String(i).split(':');const f=state.fri
 function sheetHTML(i){
   const b=blkFrom(i); if(!b) return '';
   const {f,c}=b;
-  return `<div class="sheet-card" style="--fc:${f.color}"><div class="sheet-who"><span class="dot"></span>${esc(label(f))}</div>
+  return `<div class="sheet-card" style="--fc:${f.color}"><div class="sheet-who">${avatarHTML(f,'avatar xs')}${esc(label(f))}</div>
     <div class="sheet-title">${esc(c.course)} <small>${esc(c.type)}</small></div>
     <div class="sheet-row">🕘 ${c.days.map(x=>DAYS[x]).join('')} ${fmt(c.start)}–${fmt(c.end)}</div>
     <div class="sheet-row">📍 ${esc(c.loc||'강의실 미정')}</div>
@@ -953,11 +978,13 @@ function friendCard(f){
   {
     const open=openId===f.id;
     h+=`<div class="friend" style="--fc:${f.color}"><div class="fhead">
+      ${f.isMe?`<label class="avpick" title="프로필 사진 바꾸기">${avatarHTML(f,'avatar sm')}<span class="avcam">📷</span><input type="file" accept="image/*" data-avatar="${f.id}" hidden></label>`:avatarHTML(f,'avatar sm')}
       <input type="color" value="${f.color}" data-color="${f.id}" aria-label="색">
       <input type="text" value="${esc(dn(f))}" data-name="${f.id}" maxlength="30" aria-label="이름">
       <span class="sub">${f.isMe?'<b class="mebadge">나</b> ':''}${!f.isMe&&f.code?'<span title="자동 업데이트">☁️</span> ':''}${f.classes.length}개 수업</span>
       <button class="btn small" data-toggle="${f.id}">${open?'접기':'시간표 편집'}</button></div>
       ${!f.isMe&&f.classes.length?`<div class="fsync sub">${f.code?(f.gone?'⛔ 친구가 시간표 공유를 멈췄어요. 마지막으로 받은 시간표가 보이고 있어요.':`☁️ 자동 업데이트 중${f.remoteAt?' · 친구가 '+ago(f.remoteAt)+' 저장':''}${f.synced?' · '+ago(f.synced)+' 확인':''}`):'🔗 예전 링크로 추가돼서 자동 업데이트가 안 돼요. 친구한테 새 링크를 한 번 받아주세요.'}</div>`:''}
+      ${f.isMe&&f.photo?`<div class="sub" style="padding:0 14px 6px">프로필 사진이 친구들 화면에도 보여요 · <button class="linkbtn" data-act="rmphoto" style="padding:0">사진 지우기</button></div>`:''}
       ${f.isMe?`<div class="sharebar"><button class="btn sunny" data-act="share" ${f.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>`:''}`;
     if(open){
       h+=`<div class="fbody">
@@ -1189,7 +1216,7 @@ async function fbUser(){
   const u=FB.auth.currentUser||await new Promise(r=>{const off=FB.auth.onAuthStateChanged(x=>{off();r(x)})});
   return u||(await FB.auth.signInAnonymously()).user;
 }
-const pubKeyOf=me=>packV2(me);
+const pubKeyOf=me=>packV2(me)+'#'+phash(okPhoto(me.photo));
 function setSync(st){FB.status=st;const el=document.getElementById('sync-msg');if(el)el.innerHTML=syncText()}
 function syncText(){
   const me=meOf();
@@ -1215,7 +1242,8 @@ async function publishMe(){
   pubRunning=true;setSync('saving');
   try{
     const user=await fbUser(),db=FB.db,key=pubKeyOf(me);
-    const doc={owner:user.uid,name:me.name.slice(0,30)||'나',color:me.color,data:key,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+    const data=packV2(me),ph=okPhoto(me.photo);
+    const doc=Object.assign({owner:user.uid,name:me.name.slice(0,30)||'나',color:me.color,data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},ph?{photo:ph}:{});
     if(!me.code){
       const code=rand(10),secret=rand(28),b=db.batch();
       b.set(db.collection('people').doc(code),doc);
@@ -1233,7 +1261,7 @@ async function publishMe(){
       }
     }
     // read back to confirm what friends will actually receive
-    try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===key}catch(e){me.pubOk=false}
+    try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===data}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
     watchFriends();
   }catch(e){console.warn('publish failed',e);setSync('error')}
@@ -1245,7 +1273,7 @@ async function fetchPerson(code){
   const snap=await FB.db.collection('people').doc(code).get();
   if(!snap.exists) return null;
   const d=snap.data(),p=unpackV2(d.data);
-  p.name=d.name||p.name;p.code=code;return p;
+  p.name=d.name||p.name;p.code=code;p.photo=okPhoto(d.photo);return p;
 }
 const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
 let needRender=false;
@@ -1253,9 +1281,9 @@ document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing(
 function applyMine(d){
   const me=meOf(); if(!me||!d||!d.data) return;
   if(me.pubKey!==pubKeyOf(me)) return;            // this device has unsaved edits: they win
-  if(d.data===me.pubKey) return;                  // nothing new
+  if(d.data===packV2(me)&&(okPhoto(d.photo)||'')===(okPhoto(me.photo)||'')) return; // nothing new
   let p;try{p=unpackV2(d.data)}catch(e){return}
-  me.name=d.name||p.name;me.classes=p.classes;if(/^#[0-9a-f]{6}$/i.test(d.color||''))me.color=d.color;
+  me.name=d.name||p.name;me.classes=p.classes;me.photo=okPhoto(d.photo);if(/^#[0-9a-f]{6}$/i.test(d.color||''))me.color=d.color;
   me.pubKey=pubKeyOf(me);me.pubAt=Date.now();localSave();if(!typing())render();else needRender=true;
 }
 function markGone(code){const f=others().find(x=>x.code===code);if(f&&!f.gone){f.gone=true;localSave();if(!editCls)render()}}
@@ -1264,6 +1292,7 @@ function applyRemote(code,d){
   let p; try{p=unpackV2(d.data)}catch(e){return}
   p.name=d.name||p.name;
   f.synced=Date.now();f.gone=false;
+  const ph=okPhoto(d.photo);if((ph||'')!==(f.photo||'')){f.photo=ph;localSave();if(!typing())render();else needRender=true}
   if(d.updatedAt&&d.updatedAt.toMillis)f.remoteAt=d.updatedAt.toMillis();
   if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!typing())render();else needRender=true}
   else{localSave();if(tab==='manage'&&!typing())render()}
@@ -1470,6 +1499,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){tab='manage';const me=meOf();if(me)openId=me.id;render();return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='rmphoto'){const me=meOf();if(me){delete me.photo;save();flushPublish();render()}return}
   if(d.icsdl){const file=icsFile(d.icsdl),a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();
     setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);const m=document.getElementById('icsmsg-'+d.icsdl);if(m){m.className='msg ok';m.textContent='파일을 만들었어요. 열면 캘린더에 추가할 수 있어요.'}return}
   if(d.icsshare){const file=icsFile(d.icsshare);if(navigator.canShare&&navigator.canShare({files:[file]}))navigator.share({files:[file],title:file.name}).catch(()=>{});
@@ -1574,6 +1604,11 @@ view.addEventListener('click',async e=>{
 });
 view.addEventListener('change',e=>{
   const t=e.target;
+  if(t.dataset.avatar&&t.files&&t.files[0]){
+    const f=state.friends.find(x=>x.id===t.dataset.avatar),file=t.files[0];t.value='';
+    makeAvatar(file).then(d=>{if(!d){toast('사진을 줄이지 못했어요. 다른 사진으로 해볼래요?');return}f.photo=d;save();flushPublish();render();toast('프로필 사진을 바꿨어요')}).catch(()=>toast('이 사진은 열 수 없어요'));
+    return;
+  }
   if(t.dataset.photo&&t.files&&t.files[0]){readPhoto(t.dataset.photo,t.files[0]);t.value='';return}
   if(t.dataset.ics&&t.files&&t.files[0]){const fid=t.dataset.ics;t.files[0].text().then(txt=>importICSInto(fid,txt));t.value='';return}
   if(t.dataset.name){const f=state.friends.find(x=>x.id===t.dataset.name),v=t.value.trim().slice(0,30);if(f.isMe||!f.code)f.name=v||f.name;else f.nick=v&&v!==f.name?v:undefined;save()}
