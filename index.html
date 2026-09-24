@@ -493,7 +493,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='0926-4';
+const APP_VER='0926-5';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1906,19 +1906,28 @@ function setMini(on){
     const y=window.scrollY,dy=y-lastY;lastY=y;
     const t=document.getElementById('ptitle'),showTop=t&&t.getBoundingClientRect().bottom<(parseFloat(getComputedStyle(document.documentElement).paddingTop)||0)+8;
     document.getElementById('topbar').classList.toggle('show',!!showTop);document.body.classList.toggle('scrolled',!!showTop);
-    if(y<30||window.innerHeight+y>=document.documentElement.scrollHeight-4&&dy<0){setMini(false);acc=0;return}
-    acc=(dy>0)===(acc>0)?acc+dy:dy;
-    if(acc>28)setMini(true);else if(acc<-18)setMini(false);
   };
   window.addEventListener('scroll',onScroll,{passive:true});
+  // idle for a moment -> the tab bar gathers into one bubble; any touch brings it back
+  let idleT=null;
+  const wake=()=>{
+    setMini(false);clearTimeout(idleT);
+    idleT=setTimeout(function nap(){
+      const sh=document.getElementById('sheet');
+      if(typing()||(sh&&!sh.hidden)||document.getElementById('tabbar').classList.contains('drag')){idleT=setTimeout(nap,1800);return}
+      setMini(true);
+    },1800);
+  };
+  ['pointerdown','touchstart','wheel','keydown','scroll'].forEach(ev=>window.addEventListener(ev,wake,{passive:true}));
+  wake();
 })();
 window.addEventListener('resize',()=>{indPos=null;placeInd()});
 (()=>{
   const bar=document.getElementById('tabbar');let drag=null;
   const nearest=cx=>{let best=null,bd=1e9;bar.querySelectorAll('button').forEach(b=>{const r=b.getBoundingClientRect(),d=Math.abs(r.left+r.width/2-cx);if(d<bd){bd=d;best=b}});return best};
-  bar.addEventListener('pointerdown',e=>{drag={x0:e.clientX,moved:false,id:e.pointerId};bar.setPointerCapture(e.pointerId)});
+  bar.addEventListener('pointerdown',e=>{drag={x0:e.clientX,moved:false,id:e.pointerId,wasMini:bar.classList.contains('mini')};bar.setPointerCapture(e.pointerId)});
   bar.addEventListener('pointermove',e=>{
-    if(!drag||e.pointerId!==drag.id||bar.classList.contains('mini'))return;
+    if(!drag||e.pointerId!==drag.id||drag.wasMini)return;
     if(!drag.moved&&Math.abs(e.clientX-drag.x0)<6)return;
     drag.moved=true;bar.classList.add('drag');
     const br=bar.getBoundingClientRect(),w=indPos?indPos.w:60,x=Math.max(5,Math.min(br.width-w-5,e.clientX-br.left-w/2));
@@ -1926,7 +1935,7 @@ window.addEventListener('resize',()=>{indPos=null;placeInd()});
   });
   const end=e=>{
     if(!drag||e.pointerId!==drag.id)return;
-    if(bar.classList.contains('mini')){drag=null;setMini(false);return}
+    if(drag.wasMini){drag=null;setMini(false);return}
     bar.classList.remove('drag');bar.querySelectorAll('button').forEach(b=>b.style.color='');
     const nb=nearest(e.clientX);drag=null;
     if(nb){indPos=null;if(nb.dataset.tab===tab)placeInd();goTab(nb.dataset.tab)}
