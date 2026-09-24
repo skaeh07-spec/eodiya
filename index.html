@@ -468,6 +468,15 @@ textarea{border:none}
 body::before{transition:opacity .25s}
 body.scrolled::before{opacity:0}
 @media (prefers-reduced-motion:reduce){.tabbar,.tabbar button,.topbar{transition:none}.tabbar.mini{animation:none}}
+.tabbar{-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);will-change:width;contain:layout paint}
+.tabbar.mini{animation:none}
+.tabbar.anim{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-solid)}
+:root{--glass-solid:rgba(246,246,248,.96)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--glass-solid:rgba(36,36,40,.96)}}
+:root[data-theme="dark"]{--glass-solid:rgba(36,36,40,.96)}
+.topbar{-webkit-backdrop-filter:none;backdrop-filter:none;background:transparent;border-bottom-color:transparent;transition:opacity .2s,transform .2s,background .2s}
+.topbar.show{-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);background:var(--glass-bg);border-bottom-color:var(--line)}
+.row,.slot{animation:none}
 </style>
 </head>
 <body>
@@ -493,7 +502,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='0926-6';
+const APP_VER='0926-7';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1258,7 +1267,7 @@ function render(){
   syncClock();
   document.querySelectorAll('#tabbar button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
   document.getElementById('ptitle').textContent=TAB_TITLES[tab]||'';document.getElementById('topTitle').textContent=TAB_TITLES[tab]||'';
-  document.getElementById('clockBox').hidden=(tab==='manage'||tab==='me');
+  document.getElementById('clockBox').hidden=(tab==='manage'||tab==='me');if(window.__measureTitle)requestAnimationFrame(window.__measureTitle);
   const me=meOf();document.getElementById('meAv').innerHTML=me?avatarHTML(me):'<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.8 3.7-5.8 7.5-5.8s6.7 2 7.5 5.8"/></svg>';
   placeInd();
   const v=document.getElementById('view');
@@ -1895,23 +1904,31 @@ function goTab(t){
 }
 document.getElementById('meAv').addEventListener('click',()=>goTab('me'));
 /* ---- iOS-style scroll: tab bar shrinks into a bubble, large title collapses into a glass bar ---- */
+let animT=null;
 function setMini(on){
   const bar=document.getElementById('tabbar');if(!bar||bar.classList.contains('mini')===on)return;
+  // while the bar changes size, drop the (expensive) live blur and use a plain glass color
+  bar.classList.add('anim');clearTimeout(animT);animT=setTimeout(()=>bar.classList.remove('anim'),600);
   bar.classList.toggle('mini',on);
-  if(!on){indPos=null;setTimeout(placeInd,480)}
+  if(!on){indPos=null;setTimeout(placeInd,500)}
 }
 (()=>{
   let lastY=window.scrollY,acc=0;
+  // measure the title once (not on every scroll event)
+  let titleEdge=60,topShown=false,ticking=false;
+  const measure=()=>{const t=document.getElementById('ptitle'),safe=parseFloat(getComputedStyle(document.documentElement).paddingTop)||0;
+    if(t)titleEdge=t.getBoundingClientRect().bottom+window.scrollY-safe-8};
+  window.addEventListener('resize',measure);setTimeout(measure,0);window.__measureTitle=measure;
   const onScroll=()=>{
     const y=window.scrollY,dy=y-lastY;lastY=y;
-    const t=document.getElementById('ptitle'),showTop=t&&t.getBoundingClientRect().bottom<(parseFloat(getComputedStyle(document.documentElement).paddingTop)||0)+8;
-    document.getElementById('topbar').classList.toggle('show',!!showTop);document.body.classList.toggle('scrolled',!!showTop);
+    const showTop=y>titleEdge;
+    if(showTop!==topShown){topShown=showTop;document.getElementById('topbar').classList.toggle('show',showTop);document.body.classList.toggle('scrolled',showTop)}
     // Apple Music style: scrolling down gathers the bar into one bubble right away;
     // it only opens again when you reach the very top or tap the bubble
     if(y<=2){setMini(false);return}
     if(dy>0)setMini(true);
   };
-  window.addEventListener('scroll',onScroll,{passive:true});
+  window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{ticking=false;onScroll()})}},{passive:true});
 })();
 window.addEventListener('resize',()=>{indPos=null;placeInd()});
 (()=>{
