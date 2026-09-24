@@ -5,16 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="어디야?">
-<meta name="theme-color" content="#4B5BFF">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>어디야? · 친구 시간표</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=Do+Hyeon&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#F3F6FF; --panel:#FFFFFF; --ink:#1A1F36; --muted:#6B7390; --line:#E4E8F6; --soft:#F7F9FF;
@@ -319,6 +317,107 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
   .row,.slot{animation:pop .2s ease-out both}
   @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 }
+
+/* =================== Apple-style theme =================== */
+:root{
+  --bg:#F2F2F7;--panel:#FFFFFF;--soft:rgba(118,118,128,.12);--fill2:rgba(118,118,128,.08);
+  --ink:#000000;--muted:rgba(60,60,67,.6);--line:rgba(60,60,67,.16);
+  --accent:#007AFF;--accent-ink:#FFFFFF;--free:#34C759;--busy:#FF3B30;--sun:#FFCC00;
+  --shadow:none;--on-status:#FFFFFF;
+  --glass-bg:rgba(250,250,252,.62);--glass-edge:rgba(255,255,255,.8);--glass-ink:#000;--glass-muted:rgba(60,60,67,.62);--ind-bg:rgba(118,118,128,.16);
+  --seg-on:#FFFFFF;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#000000;--panel:#1C1C1E;--soft:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.16);
+  --ink:#FFFFFF;--muted:rgba(235,235,245,.6);--line:rgba(84,84,88,.55);
+  --accent:#0A84FF;--accent-ink:#FFFFFF;--free:#30D158;--busy:#FF453A;--sun:#FFD60A;--on-status:#FFFFFF;
+  --glass-bg:rgba(40,40,44,.52);--glass-edge:rgba(255,255,255,.16);--glass-ink:#fff;--glass-muted:rgba(235,235,245,.6);--ind-bg:rgba(118,118,128,.3);
+  --seg-on:#636366;}}
+:root[data-theme="dark"]{
+  --bg:#000000;--panel:#1C1C1E;--soft:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.16);
+  --ink:#FFFFFF;--muted:rgba(235,235,245,.6);--line:rgba(84,84,88,.55);
+  --accent:#0A84FF;--accent-ink:#FFFFFF;--free:#30D158;--busy:#FF453A;--sun:#FFD60A;--on-status:#FFFFFF;
+  --glass-bg:rgba(40,40,44,.52);--glass-edge:rgba(255,255,255,.16);--glass-ink:#fff;--glass-muted:rgba(235,235,245,.6);--ind-bg:rgba(118,118,128,.3);--seg-on:#636366}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo","Pretendard",system-ui,"Segoe UI","Malgun Gothic",sans-serif;
+  font-size:16px;line-height:1.45;letter-spacing:-.2px;-webkit-font-smoothing:antialiased}
+.ptitle,.where,.avatar,.pname,.sheet-title,h2.sec{font-family:inherit}
+.ptitle{font-size:34px;font-weight:700;letter-spacing:.2px}
+h2.sec{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.3px;margin:26px 4px 10px}
+.panel{border-radius:22px;box-shadow:none;padding:16px}
+.panel.fold{padding:0 18px}
+.panel.fold[open]{padding-bottom:16px}
+.avcam{background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.hint,.sub{color:var(--muted)}
+/* buttons: capsules */
+.btn{border-radius:999px;background:var(--soft);color:var(--ink);font-weight:600;padding:9px 16px}
+.btn.small{padding:6px 13px;font-size:14px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.sunny{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.btn.danger{background:color-mix(in srgb,var(--busy) 14%,transparent);color:var(--busy)}
+.btn.armed{background:var(--busy);color:#fff}
+.btn.share{display:inline-flex;align-items:center;gap:7px;padding:11px 20px;font-size:16px}
+.btn.share svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.linkbtn{color:var(--accent);text-decoration:none;font-weight:500}
+/* header time controls */
+.clock{background:none;box-shadow:none;padding:0;gap:6px}
+.clock select,.clock input{background:var(--panel);border-radius:999px;padding:8px 14px;font-weight:500}
+.clock .live{background:var(--panel);border-radius:999px;padding:8px 16px;font-weight:600;color:var(--ink)}
+.clock .live.on{background:var(--accent);color:#fff}
+/* "now" list: iOS inset-grouped rows */
+.row{padding:12px 2px;border-bottom:.5px solid var(--line);gap:12px}
+.row:last-child{border-bottom:none}
+.avatar{width:44px;height:44px;font-size:18px;font-weight:600}
+.who{font-size:13px;font-weight:500;color:var(--muted)}
+.where{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.badge{font-size:12.5px;font-weight:600;padding:4px 10px}
+.badge.free{background:color-mix(in srgb,var(--free) 18%,transparent);color:var(--free)}
+.badge.busy{background:color-mix(in srgb,var(--busy) 16%,transparent);color:var(--busy)}
+/* chips & segmented controls */
+.chip{background:var(--soft);font-weight:500}
+.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--fc) 20%,transparent)}
+.chip[aria-pressed="false"]{background:var(--fill2);opacity:.55}
+.seg,.ce-rec .seg{background:var(--soft);border-radius:10px;padding:2px}
+.seg button{border-radius:8px;color:var(--ink);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--seg-on);color:var(--ink);box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+.daytabs button{background:var(--soft);border-radius:14px;font-weight:600}
+.daytabs button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.weeknav button{background:var(--soft);border-radius:999px}
+.dchip{background:var(--soft);border-radius:10px;color:var(--ink)}
+.dchip[aria-pressed="true"]{background:var(--accent);color:#fff}
+/* timetable */
+.dcol{background:var(--fill2);border-radius:14px}
+.hline{border-top:.5px solid var(--line)}
+.blk{border-radius:10px;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.15)}
+.blk.off{background:transparent;color:var(--ink)}
+.nowline{border-top-color:var(--busy)}
+.nowline::before{background:var(--busy)}
+.gh.today span{background:var(--busy);color:#fff}
+.slot{background:color-mix(in srgb,var(--free) 16%,transparent);color:var(--free);border-radius:10px;font-weight:600}
+/* inputs */
+textarea,.field,.manual input,.ced input,.ced select,.expbox input[type=date]{background:var(--soft);border:none;border-radius:12px}
+textarea{border:none}
+.sub-fold{background:var(--fill2);border-radius:16px}
+.sub-fold textarea{background:var(--panel)}
+.crow{background:var(--fill2);border-radius:14px}
+.ced{background:var(--fill2);border:1.5px solid var(--accent)}
+.ced input,.ced select{background:var(--panel)}
+.friend{border-radius:22px;box-shadow:none}
+.fold>summary::after{color:var(--muted);font-size:13px}
+/* profile */
+.avatar.lg{outline:none;border:none;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+.pname{font-size:26px;font-weight:700;letter-spacing:-.3px}
+.profile{padding:26px 16px 18px;border-radius:26px}
+/* floating bits */
+#toast{background:rgba(28,28,30,.86);color:#fff;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-radius:999px;font-weight:500}
+#sheet{background:rgba(0,0,0,.35)}
+.sheet-card{border-radius:30px;border-top:none;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.sheet-who .avatar.xs{width:22px;height:22px}
+.install,.invite{border:none}
+.mebadge{background:var(--accent);color:#fff;border-radius:6px}
+#netBadge{background:var(--busy)}
+.tabbar button[aria-selected="true"]{color:var(--accent)}
+.tab-ind{background:var(--ind-bg);box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 2px 10px rgba(0,0,0,.08)}
+.meav{box-shadow:none}
 </style>
 </head>
 <body>
@@ -343,10 +442,10 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 </div>
 
 <script>
-const APP_VER='0925-1';
+const APP_VER='0925-2';
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
-const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
+const PALETTE=['#0A84FF','#FF9F0A','#30D158','#BF5AF2','#FF375F','#64D2FF','#5E5CE6','#FFD60A'];
 const START=8*60, END=22*60, MIN_FREE=30;
 
 let state={friends:[]};
@@ -765,7 +864,7 @@ function foldICS(line){ // lines longer than 75 bytes must be folded
 function exportHTML(f){
   if(!f.classes.length) return '';
   const def=addDaysKey(todayKey(),7*14),iso=k=>k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8);
-  return `<details class="fold sub-fold" data-fold="exp-${f.id}"${openAttr('exp-'+f.id,false)}><summary><b>📅 캘린더로 내보내기</b></summary><div class="expbox">
+  return `<details class="fold sub-fold" data-fold="exp-${f.id}"${openAttr('exp-'+f.id,false)}><summary><b>캘린더로 내보내기</b></summary><div class="expbox">
     <p class="sub" style="margin:0 0 8px">아이폰 캘린더나 구글 캘린더에 이 시간표를 넣어요. 끝나는 날이 정해지지 않은 수업은 아래 날짜까지 반복해요.</p>
     <div class="ce-row"><span class="sub">반복 끝나는 날</span><input type="date" id="ics-until-${f.id}" value="${iso(def)}"></div>
     <div class="actions" style="margin-bottom:0"><button class="btn" data-icsdl="${f.id}">파일 받기</button>${navigator.canShare?`<button class="btn" data-icsshare="${f.id}">공유…</button>`:''}</div>
@@ -1045,7 +1144,7 @@ function profileHTML(me){
     <input type="text" class="pname" value="${esc(me.name)}" data-name="${me.id}" maxlength="30" aria-label="내 이름">
     <div class="sub">${me.classes.length}개 수업 · 친구들한테 이렇게 보여요</div>
     <div class="pbtns">${me.photo?`<button class="btn small" data-act="cropAgain">✂️ 사진 조정</button><button class="btn small" data-act="rmphoto">사진 지우기</button>`:`<span class="sub">동그라미를 눌러서 프로필 사진을 넣어보세요</span>`}</div>
-    <div class="sharebar"><button class="btn sunny" data-act="share" ${me.classes.length?'':'disabled'}>📤 내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>
+    <div class="sharebar"><button class="btn primary share" data-act="share" ${me.classes.length?'':'disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v6.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V12"/></svg>내 시간표 공유하기</button><span class="sub" id="share-msg"></span><span class="sub" id="sync-msg" style="flex-basis:100%">${syncText()}</span></div>
   </div>`;
 }
 function viewMe(){
@@ -1058,7 +1157,7 @@ function viewMe(){
   }else{
     h+=profileHTML(me);
     const days=[...new Set(me.classes.flatMap(c=>c.days))].sort((a,b)=>a-b).map(d=>DAYS[d]).join('');
-    h+=`<details class="panel fold mycls" data-fold="mycls"${openAttr('mycls',!me.classes.length||!!editCls)}><summary><b>📚 내 수업</b> <span class="sub">${me.classes.length}개${days?' · '+days:''}</span></summary><div class="mebody">${cardBody(me)}</div></details>`;
+    h+=`<details class="panel fold mycls" data-fold="mycls"${openAttr('mycls',!me.classes.length||!!editCls)}><summary><b>내 수업</b> <span class="sub">${me.classes.length}개${days?' · '+days:''}</span></summary><div class="mebody">${cardBody(me)}</div></details>`;
   }
   h+=`<h2 class="sec">계정 · 백업</h2>`+acctHTML()+backupHTML();
   return h+`<p class="ver sub">어디야? 버전 ${APP_VER} · 친구도 같은 버전이어야 모든 기능이 보여요</p>`;
@@ -1082,7 +1181,7 @@ function friendCard(f){
 function cardBody(f){
       return `
         <div class="ce-row" style="margin-bottom:8px"><span class="sub">시간표 색</span><input type="color" value="${f.color}" data-color="${f.id}" aria-label="색" class="colorin"></div>
-        <details class="fold sub-fold" data-fold="imp-${f.id}"${openAttr('imp-'+f.id,!f.classes.length)}><summary><b>📥 시간표 불러오기</b> <span class="sub">Quest 복사 · 사진 · 캘린더 파일</span></summary>
+        <details class="fold sub-fold" data-fold="imp-${f.id}"${openAttr('imp-'+f.id,!f.classes.length)}><summary><b>시간표 불러오기</b> <span class="sub">Quest 복사 · 사진 · 캘린더 파일</span></summary>
         <p class="hint">Quest의 “My Class Schedule” (List View) 내용을 통째로 복사해서 붙여넣거나, 한 줄에 수업 하나씩 적어도 돼요. 캘린더 파일(.ics) 내용을 붙여넣어도 읽어요.</p>
         <textarea id="paste-${f.id}" style="min-height:160px" placeholder="MATH 137 | MWF | 10:30-11:20 | MC 2065&#10;CS 135 | TTh | 1:00PM-2:20PM | DC 1350&#10;경제원론 | 화목 | 14:30-15:50 | HH 1101"></textarea>
         <div class="actions" style="margin-top:0"><label class="btn photo">📷 사진에서 글씨 읽기<input type="file" accept="image/*" data-photo="${f.id}" hidden></label><label class="btn photo">📅 캘린더 파일(.ics)<input type="file" accept=".ics,text/calendar" data-ics="${f.id}" hidden></label></div>
@@ -1549,7 +1648,7 @@ async function googleLogout(){
 }
 function acctHTML(){
   const u=FB.auth&&FB.auth.currentUser;
-  if(u&&!u.isAnonymous) return `<details class="panel fold" data-fold="acct"${openAttr('acct',false)}><summary><b>✅ 구글 계정 연결됨</b> <span class="sub">${esc(u.email||'')}</span></summary>
+  if(u&&!u.isAnonymous) return `<details class="panel fold" data-fold="acct"${openAttr('acct',false)}><summary><b>구글 계정 연결됨</b> <span class="sub">${esc(u.email||'')}</span></summary>
     <div class="acct"><div class="sub">다른 기기에서도 이 계정으로 로그인하면 내 시간표와 친구 목록이 똑같이 보여요.</div>
     <button class="btn small" data-act="logout">로그아웃</button><p class="msg" id="acct-msg"></p></div></details>`;
   return `<details class="panel fold" data-fold="acct"${openAttr('acct',true)}><summary><b>구글 계정 연결</b> <span class="sub">(선택)</span></summary>
