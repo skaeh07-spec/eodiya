@@ -49,7 +49,7 @@ button{cursor:pointer}
 body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
 .wrap{max-width:900px;margin:0 auto;padding:22px 16px 60px}
 
-header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+header.top{display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px}
 .brand{font-family:"Do Hyeon","IBM Plex Sans KR",sans-serif;font-weight:400;font-size:46px;line-height:1;margin:0;display:flex;align-items:center;gap:10px}
 .brand .pin{display:inline-grid;place-items:center;width:52px;height:52px;border-radius:16px;background:var(--sun);font-size:28px;transform:rotate(-8deg);box-shadow:var(--shadow)}
 .brand small{display:block;font-family:"IBM Plex Sans KR",sans-serif;font-size:13.5px;color:var(--muted);margin-top:6px}
@@ -58,9 +58,45 @@ header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-
 .clock .live{font-size:14px;padding:7px 14px;border-radius:12px;border:none;background:var(--soft);font-weight:500}
 .clock .live.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
 
-nav.tabs{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;background:var(--panel);border-radius:18px;padding:5px;box-shadow:var(--shadow)}
-nav.tabs button{flex:1;border:none;background:transparent;padding:10px 12px;border-radius:14px;color:var(--muted);font-weight:500;white-space:nowrap}
-nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.titlerow{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+.ptitle{margin:0;font-size:34px;font-weight:800;letter-spacing:-.6px;line-height:1.15}
+.meav{width:42px;height:42px;border-radius:50%;border:none;padding:0;background:var(--soft);overflow:hidden;flex:none;display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.meav .avatar{width:42px;height:42px;border-radius:50%;background:var(--fc);color:#fff;display:grid;place-items:center;font-weight:700;font-size:17px}
+.meav svg{width:24px;height:24px;fill:none;stroke:var(--muted);stroke-width:1.8}
+#clockBox[hidden]{display:none}
+
+/* ---- Liquid Glass tab bar ---- */
+:root{--glass-bg:rgba(255,255,255,.52);--glass-edge:rgba(255,255,255,.75);--glass-ink:#1A1F36;--glass-muted:rgba(26,31,54,.62);--ind-bg:rgba(255,255,255,.7)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--glass-bg:rgba(34,40,72,.42);--glass-edge:rgba(255,255,255,.22);--glass-ink:#fff;--glass-muted:rgba(235,238,255,.66);--ind-bg:rgba(255,255,255,.16)}}
+:root[data-theme="dark"]{--glass-bg:rgba(34,40,72,.42);--glass-edge:rgba(255,255,255,.22);--glass-ink:#fff;--glass-muted:rgba(235,238,255,.66);--ind-bg:rgba(255,255,255,.16)}
+.tabbar{position:fixed;z-index:15;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  max-width:520px;margin:0 auto;height:66px;border-radius:33px;display:flex;align-items:stretch;padding:5px;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,0) 45%),var(--glass-bg);
+  -webkit-backdrop-filter:blur(22px) saturate(190%);backdrop-filter:blur(22px) saturate(190%);
+  border:1px solid var(--glass-edge);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.12),inset 0 0 0 .5px rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.12);
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.tabbar::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 60% at 50% -20%,rgba(255,255,255,.35),transparent 60%),radial-gradient(60% 50% at 10% 120%,rgba(255,255,255,.10),transparent 70%)}
+.tabbar button{position:relative;z-index:1;flex:1;min-width:0;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--glass-muted);padding:0;-webkit-tap-highlight-color:transparent;transition:color .25s}
+.tabbar button[aria-selected="true"]{color:var(--accent)}
+.ticon svg{width:25px;height:25px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
+.tabbar button[aria-selected="true"] .ticon svg{transform:scale(1.08);stroke-width:2.1}
+.tlabel{font-size:11px;font-weight:600;letter-spacing:-.1px;white-space:nowrap}
+.tab-ind{position:absolute;z-index:0;top:5px;bottom:5px;left:0;width:var(--w,60px);transform:translateX(var(--x,5px));border-radius:28px;
+  background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.04)),var(--ind-bg);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.6),inset 0 -1px 2px rgba(255,255,255,.1),0 4px 14px rgba(0,0,0,.16);
+  transition:transform .42s cubic-bezier(.3,1.35,.45,1),width .42s cubic-bezier(.3,1.35,.45,1)}
+.tabbar.drag button[aria-selected="true"]{color:var(--glass-muted)}
+.tabbar.drag .tab-ind{transition:none;transform:translateX(var(--x)) scale(1.12,1.08)}
+.tabbar.stretch .tab-ind{transition:transform .18s ease-out,width .18s ease-out}
+.wrap{padding-bottom:calc(110px + env(safe-area-inset-bottom,0px)) !important}
+#toast{bottom:calc(92px + env(safe-area-inset-bottom,0px)) !important}
+#view.in-r{animation:inR .32s cubic-bezier(.2,.9,.3,1)}
+#view.in-l{animation:inL .32s cubic-bezier(.2,.9,.3,1)}
+@keyframes inR{from{opacity:0;transform:translateX(34px)}to{opacity:1;transform:none}}
+@keyframes inL{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.tab-ind,.ticon svg{transition:none}#view.in-r,#view.in-l{animation:none}}
 
 .panel{background:var(--panel);border-radius:22px;padding:18px;box-shadow:var(--shadow)}
 .hint{color:var(--muted);font-size:14px;margin:0 0 12px}
@@ -269,7 +305,7 @@ h2.sec:first-child{margin-top:4px}
   .brand{font-size:38px}.brand .pin{width:44px;height:44px;font-size:24px}
   .where{font-size:23px}
   .avatar{width:40px;height:40px;font-size:19px}
-  nav.tabs button{padding:9px 8px;font-size:14px}
+  .ptitle{font-size:30px}
 }
 label.btn.photo{display:inline-block;cursor:pointer}
 .msg{font-size:13.5px;margin:6px 0 0}
@@ -288,8 +324,11 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
 <body>
 <div class="wrap">
   <header class="top">
-    <h1 class="brand"><span class="pin" aria-hidden="true">📍</span><span>어디야?<small>친구가 지금 어디 있는지, 언제 비는지</small></span></h1>
-    <div class="clock" aria-label="기준 시간">
+    <div class="titlerow">
+      <h1 class="ptitle" id="ptitle">지금 어디?</h1>
+      <button type="button" class="meav" id="meAv" aria-label="내 시간표"></button>
+    </div>
+    <div class="clock" id="clockBox" aria-label="기준 시간">
       <select id="daySel" aria-label="요일"></select>
       <input id="timeSel" type="time" aria-label="시간">
       <button id="liveBtn" class="live on" type="button">지금</button>
@@ -298,20 +337,14 @@ details.help pre{white-space:pre-wrap;background:var(--soft);border-radius:12px;
     </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="now" aria-selected="true">지금</button>
-    <button role="tab" data-tab="grid" aria-selected="false">시간표</button>
-    <button role="tab" data-tab="free" aria-selected="false">빈 시간</button>
-    <button role="tab" data-tab="manage" aria-selected="false">친구</button>
-    <button role="tab" data-tab="me" aria-selected="false">내 시간표</button>
-  </nav>
-
   <main id="view"></main>
   <div id="sheet" hidden></div>
+<nav class="tabbar" id="tabbar" role="tablist" aria-label="메뉴"><span class="tab-ind" id="tabInd" aria-hidden="true"></span><button role="tab" data-tab="now" aria-selected="true"><span class="ticon"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg></span><span class="tlabel">지금</span></button><button role="tab" data-tab="grid" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 3v3M16 3v3M8 13h2M14 13h2M8 16.5h2"/></svg></span><span class="tlabel">시간표</span></button><button role="tab" data-tab="free" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="tlabel">빈 시간</span></button><button role="tab" data-tab="manage" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.2 14.6c2.6.1 4.3 1.6 4.8 4.4"/></svg></span><span class="tlabel">친구</span></button><button role="tab" data-tab="me" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.8 3.7-5.8 7.5-5.8s6.7 2 7.5 5.8"/></svg></span><span class="tlabel">나</span></button></nav>
 </div>
 
 <script>
-const APP_VER='0924-9';
+const APP_VER='0925-1';
+const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#4B5BFF','#FF7A45','#12B886','#B45CFF','#F5A300','#FF4D8D','#1CB5E0','#6FAE12'];
 const START=8*60, END=22*60, MIN_FREE=30;
@@ -1068,7 +1101,11 @@ function cardBody(f){
 
 function render(){
   syncClock();
-  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
+  document.querySelectorAll('#tabbar button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
+  document.getElementById('ptitle').textContent=TAB_TITLES[tab]||'';
+  document.getElementById('clockBox').hidden=(tab==='manage'||tab==='me');
+  const me=meOf();document.getElementById('meAv').innerHTML=me?avatarHTML(me):'<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.8 3.7-5.8 7.5-5.8s6.7 2 7.5 5.8"/></svg>';
+  placeInd();
   const v=document.getElementById('view');
   const keep={};v.querySelectorAll('textarea[id],input[id]').forEach(e=>{if(e.value&&e.type!=='file')keep[e.id]=e.value});
   const focusId=document.activeElement&&document.activeElement.id;
@@ -1588,7 +1625,62 @@ function cropResult(){
 }
 
 /* ---------- events ---------- */
-document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(b){tab=b.dataset.tab;editCls=null;render()}});
+/* ---- bottom tab bar: tap, drag the glass bubble, or swipe the page ---- */
+const TAB_ORDER=['now','grid','free','manage','me'];
+function tabBtn(t){return document.querySelector(`#tabbar button[data-tab="${t}"]`)}
+let indPos=null;
+function setInd(x,w){const i=document.getElementById('tabInd');i.style.setProperty('--x',x+'px');i.style.setProperty('--w',w+'px')}
+function placeInd(){
+  const b=tabBtn(tab),bar=document.getElementById('tabbar');if(!b||!bar)return;
+  const x=b.offsetLeft,w=b.offsetWidth;
+  if(indPos&&Math.abs(indPos.x-x)>2&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    // liquid stretch: reach over both tabs first, then settle on the new one
+    const L=Math.min(indPos.x,x),R=Math.max(indPos.x+indPos.w,x+w);
+    bar.classList.add('stretch');setInd(L,R-L);
+    setTimeout(()=>{bar.classList.remove('stretch');setInd(x,w)},170);
+  }else setInd(x,w);
+  indPos={x,w};
+}
+function goTab(t){
+  if(!t||t===tab){if(t)window.scrollTo({top:0,behavior:'smooth'});return}
+  const dir=TAB_ORDER.indexOf(t)>TAB_ORDER.indexOf(tab)?'in-r':'in-l';
+  tab=t;editCls=null;render();window.scrollTo(0,0);
+  const v=document.getElementById('view');v.classList.remove('in-r','in-l');void v.offsetWidth;v.classList.add(dir);
+}
+document.getElementById('meAv').addEventListener('click',()=>goTab('me'));
+window.addEventListener('resize',()=>{indPos=null;placeInd()});
+(()=>{
+  const bar=document.getElementById('tabbar');let drag=null;
+  const nearest=cx=>{let best=null,bd=1e9;bar.querySelectorAll('button').forEach(b=>{const r=b.getBoundingClientRect(),d=Math.abs(r.left+r.width/2-cx);if(d<bd){bd=d;best=b}});return best};
+  bar.addEventListener('pointerdown',e=>{drag={x0:e.clientX,moved:false,id:e.pointerId};bar.setPointerCapture(e.pointerId)});
+  bar.addEventListener('pointermove',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    if(!drag.moved&&Math.abs(e.clientX-drag.x0)<6)return;
+    drag.moved=true;bar.classList.add('drag');
+    const br=bar.getBoundingClientRect(),w=indPos?indPos.w:60,x=Math.max(5,Math.min(br.width-w-5,e.clientX-br.left-w/2));
+    setInd(x,w);const nb=nearest(e.clientX);bar.querySelectorAll('button').forEach(b=>b.style.color=b===nb?'var(--accent)':'');
+  });
+  const end=e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    bar.classList.remove('drag');bar.querySelectorAll('button').forEach(b=>b.style.color='');
+    const nb=nearest(e.clientX);drag=null;
+    if(nb){indPos=null;if(nb.dataset.tab===tab)placeInd();goTab(nb.dataset.tab)}
+  };
+  bar.addEventListener('pointerup',end);
+  bar.addEventListener('pointercancel',e=>{if(drag){bar.classList.remove('drag');drag=null;placeInd()}});
+  bar.addEventListener('click',e=>{if(e.detail===0){const b=e.target.closest('button[data-tab]');if(b)goTab(b.dataset.tab)}}); // keyboard
+  // swipe left/right on the page to move between tabs
+  let sw=null;const view=document.getElementById('view');
+  view.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1||e.target.closest('input,textarea,select,canvas,.gridscroll,[data-noswipe]')){sw=null;return}
+    sw={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};
+  },{passive:true});
+  view.addEventListener('touchend',e=>{
+    if(!sw)return;const t=e.changedTouches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y,dt=Date.now()-sw.t;sw=null;
+    if(Math.abs(dx)<70||Math.abs(dy)>Math.abs(dx)*0.6||dt>700)return;
+    const i=TAB_ORDER.indexOf(tab),j=dx<0?i+1:i-1;if(j>=0&&j<TAB_ORDER.length)goTab(TAB_ORDER[j]);
+  },{passive:true});
+})();
 const daySel=document.getElementById('daySel');
 DAYS.forEach((d,i)=>daySel.insertAdjacentHTML('beforeend',`<option value="${i}">${d}요일</option>`));
 function setLive(on){live=on;document.getElementById('liveBtn').classList.toggle('on',on);render()}
@@ -1602,7 +1694,7 @@ view.addEventListener('click',e=>{const sm=e.target.closest('summary'),dt=sm&&sm
 view.addEventListener('click',async e=>{
   const t=e.target.closest('button'); if(!t) return;
   const d=t.dataset;
-  if(d.act==='goManage'){tab='me';render();return}
+  if(d.act==='goManage'){goTab('me');return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
   if(d.act==='cropAgain'){const me=meOf();if(!me)return;(lastCropImg?Promise.resolve(lastCropImg):loadImg(me.photo)).then(openCropper).catch(()=>{});return}
