@@ -470,7 +470,6 @@ body.scrolled::before{opacity:0}
 @media (prefers-reduced-motion:reduce){.tabbar,.tabbar button,.topbar{transition:none}.tabbar.mini{animation:none}}
 .tabbar{-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);will-change:width;contain:layout paint}
 .tabbar.mini{animation:none}
-.tabbar.anim{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-solid)}
 :root{--glass-solid:rgba(246,246,248,.96)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--glass-solid:rgba(36,36,40,.96)}}
 :root[data-theme="dark"]{--glass-solid:rgba(36,36,40,.96)}
@@ -502,7 +501,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='0926-7';
+const APP_VER='0926-8';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1907,8 +1906,6 @@ document.getElementById('meAv').addEventListener('click',()=>goTab('me'));
 let animT=null;
 function setMini(on){
   const bar=document.getElementById('tabbar');if(!bar||bar.classList.contains('mini')===on)return;
-  // while the bar changes size, drop the (expensive) live blur and use a plain glass color
-  bar.classList.add('anim');clearTimeout(animT);animT=setTimeout(()=>bar.classList.remove('anim'),600);
   bar.classList.toggle('mini',on);
   if(!on){indPos=null;setTimeout(placeInd,500)}
 }
