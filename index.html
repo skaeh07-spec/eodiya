@@ -432,6 +432,20 @@ textarea{border:none}
 .ver{font-size:11.5px;opacity:.6;margin-top:20px}
 .fsync{font-size:12.5px;padding-top:0}
 .install{justify-content:space-between}
+.mystatus{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;margin-bottom:12px;color:var(--ink)}
+.ms-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.ms-main b{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-empty{color:var(--muted)}
+.ms-go{color:var(--accent);font-weight:600;font-size:15px}
+.stsheet{text-align:left}
+.stgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 12px}
+.stchip{border:none;background:var(--soft);border-radius:16px;padding:10px 2px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:500;color:var(--ink)}
+.stchip span{font-size:22px}
+.stchip[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
+.stE{width:52px;text-align:center;font-size:20px;border:none;background:var(--soft);border-radius:12px;padding:8px 0}
+.stT{flex:1;border:none;background:var(--soft);border-radius:12px;padding:10px 12px;min-width:0}
+.stdur{display:flex;margin:12px 0 4px}
+.stdur button{flex:1;padding:7px 0}
 </style>
 </head>
 <body>
@@ -456,7 +470,7 @@ textarea{border:none}
 </div>
 
 <script>
-const APP_VER='0925-4';
+const APP_VER='0926-1';
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#0A84FF','#FF9F0A','#30D158','#BF5AF2','#FF375F','#64D2FF','#5E5CE6','#FFD60A'];
@@ -950,15 +964,19 @@ function unpackPerson(o){
 /* compact v2: fields joined by | and ~, then deflate + base64url */
 const TY2={LEC:'L',TUT:'T',LAB:'B',SEM:'S',TST:'X'},TY2R=Object.fromEntries(Object.entries(TY2).map(([a,b])=>[b,a]));
 const clean2=v=>String(v).replace(/[|~]/g,' ');
+const stActive=st=>st&&st.u&&st.u>Date.now()?st:null;
 function packV2(f){
+  const st=stActive(f.status),stSeg=st?['!S~'+clean2(st.e||'').slice(0,8)+'~'+clean2(st.t||'').slice(0,30)+'~'+Math.round(st.u/60000).toString(36)]:[];
   return ['2',clean2(f.uid||''),clean2(f.name),f.color.replace('#',''),
     ...f.classes.map(c=>[clean2(c.course),TY2[c.type]||clean2(c.type),c.days.reduce((m,d)=>m|1<<d,0).toString(36),
-      Math.round(c.start/5).toString(36),Math.round(c.end/5).toString(36),clean2(c.loc),...(flagsOf(c)?[flagsOf(c)]:[])].join('~'))].join('|');
+      Math.round(c.start/5).toString(36),Math.round(c.end/5).toString(36),clean2(c.loc),...(flagsOf(c)?[flagsOf(c)]:[])].join('~')),...stSeg].join('|');
 }
 function unpackV2(str){
-  const [v,u,n,col,...cs]=str.split('|'); if(v!=='2') throw new Error('ver');
-  return unpackPerson({u,n,c:'#'+col,k:cs.map(x=>{const [co,ty,dm,st,en,lo,fl]=x.split('~');const m=parseInt(dm,36);
-    return [co,TY2R[ty]||ty,[0,1,2,3,4,5,6].filter(d=>m&(1<<d)).join(''),parseInt(st,36)*5,parseInt(en,36)*5,lo||'',fl||'']})});
+  const [v,u,n,col,...all]=str.split('|'); if(v!=='2') throw new Error('ver');
+  const stx=all.find(x=>x.startsWith('!S~')),cs=all.filter(x=>!x.startsWith('!'));
+  let status;if(stx){const [,e,t,um]=stx.split('~');const uMs=parseInt(um,36)*60000;if(isFinite(uMs)&&(t||e))status={e:(e||'').slice(0,8),t:(t||'').slice(0,30),u:uMs}}
+  return Object.assign(unpackPerson({u,n,c:'#'+col,k:cs.map(x=>{const [co,ty,dm,st,en,lo,fl]=x.split('~');const m=parseInt(dm,36);
+    return [co,TY2R[ty]||ty,[0,1,2,3,4,5,6].filter(d=>m&(1<<d)).join(''),parseInt(st,36)*5,parseInt(en,36)*5,lo||'',fl||'']})}),status?{status}:{});
 }
 const bytesToB64u=b=>{let s='';for(let i=0;i<b.length;i+=8192)s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
 const b64uToBytes=str=>{str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%4)str+='=';const bin=atob(str);return Uint8Array.from(bin,c=>c.charCodeAt(0))};
@@ -996,7 +1014,7 @@ function addPerson(p){
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
   if(me&&p.code&&me.code===p.code) return {kind:'me'};
   const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
-  if(ex){ex.name=p.name;ex.classes=p.classes;if(p.photo!==undefined)ex.photo=p.photo;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();if(p.code)watchFriends();return{kind:'updated',f:ex}}
+  if(ex){ex.name=p.name;ex.classes=p.classes;ex.status=p.status;if(p.photo!==undefined)ex.photo=p.photo;if(p.code)ex.code=p.code;if(p.uid)ex.uid=p.uid;save();if(p.code)watchFriends();return{kind:'updated',f:ex}}
   p.color=PALETTE[state.friends.length%PALETTE.length];
   state.friends.push(p);sel&&sel.add(p.id);save();if(p.code)watchFriends();return{kind:'added',f:p};
 }
@@ -1028,9 +1046,9 @@ function emptyHTML(){
   <div class="actions" style="justify-content:center"><button class="btn primary" data-act="goManage">${me?'내 시간표 공유하기':'내 시간표 만들기'}</button><button class="btn sunny" data-act="demo">예시로 둘러보기</button></div></div>`;
 }
 function viewNow(){
-  if(!others().length) return emptyHTML();
+  if(!others().length) return myStatusHTML()+emptyHTML();
   const r=ref();
-  const rows=others().filter(f=>f.classes.length).map(f=>{
+  const rows=others().filter(f=>f.classes.length||stActive(f.status)).map(f=>{
     const s=statusOf(f,r); let where,sub,badge;
     if(s.busy){
       where=esc(s.cur.loc||'강의실 미정');
@@ -1048,11 +1066,13 @@ function viewNow(){
         badge=`<span class="badge free">비어있음</span>`;
       }
     }
+    const fst=live&&stActive(f.status);
+    if(fst){sub=(s.busy?`${esc(s.cur.course)} 수업 시간 · `:'')+leftText(fst.u);where=`${esc(fst.e)} ${esc(fst.t)}`}
     return {s,html:`<div class="row" style="--fc:${f.color}">${avatarHTML(f)}
       <div><div class="who">${esc(dn(f))}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
   });
   rows.sort((a,b)=>(a.s.busy-b.s.busy));
-  return `<div class="panel">${live?'':`<p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준</p>`}<div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
+  return myStatusHTML()+`<div class="panel">${live?'':`<p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준</p>`}<div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
 }
 let gridMode=null, gridDay=null, blkInfo=[];
 function layoutDay(items){
@@ -1482,7 +1502,7 @@ async function fetchPerson(code){
   const d=snap.data(),p=unpackV2(d.data);
   p.name=d.name||p.name;p.code=code;p.photo=okPhoto(d.photo);return p;
 }
-const sig=(name,cl)=>JSON.stringify([name,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
+const sig=(name,cl,st)=>JSON.stringify([name,st&&stActive(st)?[st.e,st.t,st.u]:null,cl.map(c=>[c.course,c.type,c.days,c.start,c.end,c.loc,flagsOf(c)])]);
 let needRender=false;
 document.addEventListener('focusout',()=>setTimeout(()=>{if(needRender&&!typing()){needRender=false;render()}},50));
 function applyMine(d){
@@ -1490,7 +1510,7 @@ function applyMine(d){
   if(me.pubKey!==pubKeyOf(me)) return;            // this device has unsaved edits: they win
   if(d.data===packV2(me)&&(okPhoto(d.photo)||'')===(okPhoto(me.photo)||'')) return; // nothing new
   let p;try{p=unpackV2(d.data)}catch(e){return}
-  me.name=d.name||p.name;me.classes=p.classes;me.photo=okPhoto(d.photo);if(/^#[0-9a-f]{6}$/i.test(d.color||''))me.color=d.color;
+  me.name=d.name||p.name;me.classes=p.classes;me.status=p.status;me.photo=okPhoto(d.photo);if(/^#[0-9a-f]{6}$/i.test(d.color||''))me.color=d.color;
   me.pubKey=pubKeyOf(me);me.pubAt=Date.now();localSave();if(!typing())render();else needRender=true;
 }
 function markGone(code){const f=others().find(x=>x.code===code);if(f&&!f.gone){f.gone=true;localSave();if(!editCls)render()}}
@@ -1501,7 +1521,7 @@ function applyRemote(code,d){
   f.synced=Date.now();f.gone=false;
   const ph=okPhoto(d.photo);if((ph||'')!==(f.photo||'')){f.photo=ph;localSave();if(!typing())render();else needRender=true}
   if(d.updatedAt&&d.updatedAt.toMillis)f.remoteAt=d.updatedAt.toMillis();
-  if(sig(f.name,f.classes)!==sig(p.name,p.classes)){f.name=p.name;f.classes=p.classes;if(p.uid)f.uid=p.uid;localSave();if(!typing())render();else needRender=true}
+  if(sig(f.name,f.classes,f.status)!==sig(p.name,p.classes,p.status)){f.name=p.name;f.classes=p.classes;f.status=p.status;if(p.uid)f.uid=p.uid;localSave();if(!typing())render();else needRender=true}
   else{localSave();if((tab==='manage'||tab==='me')&&!typing())render()}
 }
 async function refreshAll(){
@@ -1692,6 +1712,36 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostnam
 }
 
 
+
+/* ---------- status ("where am I right now") ---------- */
+const ST_PRESETS=[['📚','도서관'],['🍜','밥 먹는 중'],['☕','카페'],['🏫','학교'],['🏋️','운동 중'],['🚌','이동 중'],['🏠','집'],['😴','쉬는 중']];
+function leftText(u){const m=Math.round((u-Date.now())/60000);return m<60?m+'분 남음':Math.floor(m/60)+'시간'+(m%60?' '+(m%60)+'분':'')+' 남음'}
+function myStatusHTML(){
+  const me=meOf();if(!me) return '';
+  const st=stActive(me.status);
+  return `<button class="panel mystatus" data-act="stOpen">${avatarHTML(me,'avatar sm')}
+    <span class="ms-main">${st?`<b>${esc(st.e)} ${esc(st.t)}</b><span class="sub">${leftText(st.u)}</span>`:`<b class="ms-empty">지금 뭐 해요?</b><span class="sub">상태를 친구들한테 알려요</span>`}</span>
+    <span class="ms-go">${st?'변경':'설정'}</span></button>`;
+}
+function statusSheet(){
+  const me=meOf(),st=stActive(me&&me.status);
+  const sh=document.getElementById('sheet');
+  sh.innerHTML=`<div class="sheet-card stsheet"><div class="sheet-title">지금 뭐 해요?</div>
+    <div class="stgrid">${ST_PRESETS.map(([e,t],i)=>`<button class="stchip" data-sp="${i}" aria-pressed="${!!st&&st.e===e&&st.t===t}"><span>${e}</span>${t}</button>`).join('')}</div>
+    <div class="ce-row"><input id="stE" class="stE" maxlength="4" value="${esc(st?st.e:'📍')}" aria-label="이모지"><input id="stT" class="stT" maxlength="30" placeholder="직접 쓰기 (예: DP 3층)" value="${esc(st?st.t:'')}"></div>
+    <div class="seg stdur">${[['60','1시간'],['180','3시간'],['day','오늘까지']].map(([v,t],i)=>`<button data-sd="${v}" aria-pressed="${i===1}">${t}</button>`).join('')}</div>
+    <div class="sheet-acts">${st?'<button class="btn danger" data-act="stClear">지우기</button>':''}<button class="btn primary" data-act="stSave">올리기</button></div></div>`;
+  sh.hidden=false;
+}
+function saveStatus(sh){
+  const me=meOf();if(!me) return;
+  const e=sh.querySelector('#stE').value.trim().slice(0,8)||'📍',t=sh.querySelector('#stT').value.trim().slice(0,30);
+  if(!t){sh.querySelector('#stT').focus();return false}
+  const d=(sh.querySelector('[data-sd][aria-pressed="true"]')||{}).dataset||{};
+  let u;if(d.sd==='day'){const x=new Date();x.setHours(23,59,0,0);u=x.getTime()}else u=Date.now()+(+(d.sd||180))*60000;
+  me.status={e,t,u};save();flushPublish();render();toast(`${e} ${t}`);return true;
+}
+
 /* ---------- photo cropper ---------- */
 let crop=null,lastCropImg=null;
 const loadImg=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
@@ -1809,6 +1859,7 @@ view.addEventListener('click',async e=>{
   if(d.act==='goManage'){goTab('me');return}
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
+  if(d.act==='stOpen'){statusSheet();return}
   if(d.act==='cropAgain'){const me=meOf();if(!me)return;(lastCropImg?Promise.resolve(lastCropImg):loadImg(me.photo)).then(openCropper).catch(()=>{});return}
   if(d.act==='rmphoto'){const me=meOf();if(me){delete me.photo;save();flushPublish();render()}return}
   if(d.icsdl){const file=icsFile(d.icsdl),a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();
@@ -1941,6 +1992,10 @@ function toggleBlk(d){
 }
 document.getElementById('sheet').addEventListener('click',e=>{
   const sh=e.currentTarget,t=e.target.closest('button');
+  if(t&&t.dataset.sp!==undefined){const [e,tx]=ST_PRESETS[+t.dataset.sp];sh.querySelector('#stE').value=e;sh.querySelector('#stT').value=tx;sh.querySelectorAll('.stchip').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
+  if(t&&t.dataset.sd){sh.querySelectorAll('[data-sd]').forEach(x=>x.setAttribute('aria-pressed',x===t));return}
+  if(t&&t.dataset.act==='stSave'){if(saveStatus(sh)!==false)sh.hidden=true;return}
+  if(t&&t.dataset.act==='stClear'){const me=meOf();if(me){delete me.status;save();flushPublish();render()}sh.hidden=true;return}
   if(t&&t.dataset.act==='cropCancel'){sh.hidden=true;crop=null;return}
   if(t&&t.dataset.act==='cropSave'){const me=meOf(),d=crop&&cropResult();if(me&&d){me.photo=d;save();flushPublish();render();toast('프로필 사진을 바꿨어요')}else toast('사진을 저장하지 못했어요');sh.hidden=true;crop=null;return}
   if(e.target.id==='sheet'&&crop) return; // don't lose the crop by tapping outside
