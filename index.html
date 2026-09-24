@@ -448,6 +448,26 @@ textarea{border:none}
 .stdur button{flex:1;padding:7px 0}
 #view details.panel.fold{margin:0 0 12px}
 #view details.panel.fold.mycls{margin-top:14px}
+.tabbar{right:auto;left:max(12px,calc(50% - 260px),env(safe-area-inset-left,0px));width:min(520px,calc(100% - 24px));margin:0;
+  transition:width .55s cubic-bezier(.32,1.28,.5,1),border-radius .55s,box-shadow .3s}
+.tabbar button{transition:flex-grow .5s cubic-bezier(.32,1.2,.5,1),opacity .22s,color .25s}
+.tabbar .tlabel{transition:opacity .2s,max-height .3s;max-height:16px;overflow:hidden}
+.tab-ind{transition:transform .42s cubic-bezier(.3,1.35,.45,1),width .42s cubic-bezier(.3,1.35,.45,1),opacity .2s}
+.tabbar.mini{width:66px;animation:squish .55s cubic-bezier(.3,1.4,.5,1)}
+.tabbar.mini button{flex-grow:0;flex-basis:0;opacity:0;pointer-events:none;overflow:hidden}
+.tabbar.mini button[aria-selected="true"]{flex-grow:1;opacity:1;pointer-events:auto;color:var(--accent)}
+.tabbar.mini .tlabel{opacity:0;max-height:0}
+.tabbar.mini .ticon svg{transform:scale(1.12)}
+.tabbar.mini .tab-ind{opacity:0}
+@keyframes squish{0%{transform:scale(1)}35%{transform:scale(.94,1.06)}70%{transform:scale(1.03,.97)}100%{transform:scale(1)}}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:31;text-align:center;font-weight:600;font-size:17px;letter-spacing:-.3px;
+  padding:calc(env(safe-area-inset-top,0px) + 11px) 16px 11px;
+  background:var(--glass-bg);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  border-bottom:.5px solid var(--line);opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s;pointer-events:none}
+.topbar.show{opacity:1;transform:none}
+body::before{transition:opacity .25s}
+body.scrolled::before{opacity:0}
+@media (prefers-reduced-motion:reduce){.tabbar,.tabbar button,.topbar{transition:none}.tabbar.mini{animation:none}}
 </style>
 </head>
 <body>
@@ -466,13 +486,14 @@ textarea{border:none}
     </div>
   </header>
 
+  <div class="topbar" id="topbar" aria-hidden="true"><span id="topTitle"></span></div>
   <main id="view"></main>
   <div id="sheet" hidden></div>
 <nav class="tabbar" id="tabbar" role="tablist" aria-label="메뉴"><span class="tab-ind" id="tabInd" aria-hidden="true"></span><button role="tab" data-tab="now" aria-selected="true"><span class="ticon"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg></span><span class="tlabel">지금</span></button><button role="tab" data-tab="grid" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 3v3M16 3v3M8 13h2M14 13h2M8 16.5h2"/></svg></span><span class="tlabel">시간표</span></button><button role="tab" data-tab="free" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><span class="tlabel">빈 시간</span></button><button role="tab" data-tab="manage" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.2 14.6c2.6.1 4.3 1.6 4.8 4.4"/></svg></span><span class="tlabel">친구</span></button><button role="tab" data-tab="me" aria-selected="false"><span class="ticon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.8 3.7-5.8 7.5-5.8s6.7 2 7.5 5.8"/></svg></span><span class="tlabel">나</span></button></nav>
 </div>
 
 <script>
-const APP_VER='0926-3';
+const APP_VER='0926-4';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1236,7 +1257,7 @@ function cardBody(f){
 function render(){
   syncClock();
   document.querySelectorAll('#tabbar button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
-  document.getElementById('ptitle').textContent=TAB_TITLES[tab]||'';
+  document.getElementById('ptitle').textContent=TAB_TITLES[tab]||'';document.getElementById('topTitle').textContent=TAB_TITLES[tab]||'';
   document.getElementById('clockBox').hidden=(tab==='manage'||tab==='me');
   const me=meOf();document.getElementById('meAv').innerHTML=me?avatarHTML(me):'<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.8 3.7-5.8 7.5-5.8s6.7 2 7.5 5.8"/></svg>';
   placeInd();
@@ -1869,17 +1890,35 @@ function placeInd(){
 function goTab(t){
   if(!t||t===tab){if(t)window.scrollTo({top:0,behavior:'smooth'});return}
   const dir=TAB_ORDER.indexOf(t)>TAB_ORDER.indexOf(tab)?'in-r':'in-l';
-  tab=t;editCls=null;render();window.scrollTo(0,0);
+  tab=t;editCls=null;render();window.scrollTo(0,0);setMini(false);
   const v=document.getElementById('view');v.classList.remove('in-r','in-l');void v.offsetWidth;v.classList.add(dir);
 }
 document.getElementById('meAv').addEventListener('click',()=>goTab('me'));
+/* ---- iOS-style scroll: tab bar shrinks into a bubble, large title collapses into a glass bar ---- */
+function setMini(on){
+  const bar=document.getElementById('tabbar');if(!bar||bar.classList.contains('mini')===on)return;
+  bar.classList.toggle('mini',on);
+  if(!on){indPos=null;setTimeout(placeInd,480)}
+}
+(()=>{
+  let lastY=window.scrollY,acc=0;
+  const onScroll=()=>{
+    const y=window.scrollY,dy=y-lastY;lastY=y;
+    const t=document.getElementById('ptitle'),showTop=t&&t.getBoundingClientRect().bottom<(parseFloat(getComputedStyle(document.documentElement).paddingTop)||0)+8;
+    document.getElementById('topbar').classList.toggle('show',!!showTop);document.body.classList.toggle('scrolled',!!showTop);
+    if(y<30||window.innerHeight+y>=document.documentElement.scrollHeight-4&&dy<0){setMini(false);acc=0;return}
+    acc=(dy>0)===(acc>0)?acc+dy:dy;
+    if(acc>28)setMini(true);else if(acc<-18)setMini(false);
+  };
+  window.addEventListener('scroll',onScroll,{passive:true});
+})();
 window.addEventListener('resize',()=>{indPos=null;placeInd()});
 (()=>{
   const bar=document.getElementById('tabbar');let drag=null;
   const nearest=cx=>{let best=null,bd=1e9;bar.querySelectorAll('button').forEach(b=>{const r=b.getBoundingClientRect(),d=Math.abs(r.left+r.width/2-cx);if(d<bd){bd=d;best=b}});return best};
   bar.addEventListener('pointerdown',e=>{drag={x0:e.clientX,moved:false,id:e.pointerId};bar.setPointerCapture(e.pointerId)});
   bar.addEventListener('pointermove',e=>{
-    if(!drag||e.pointerId!==drag.id)return;
+    if(!drag||e.pointerId!==drag.id||bar.classList.contains('mini'))return;
     if(!drag.moved&&Math.abs(e.clientX-drag.x0)<6)return;
     drag.moved=true;bar.classList.add('drag');
     const br=bar.getBoundingClientRect(),w=indPos?indPos.w:60,x=Math.max(5,Math.min(br.width-w-5,e.clientX-br.left-w/2));
@@ -1887,6 +1926,7 @@ window.addEventListener('resize',()=>{indPos=null;placeInd()});
   });
   const end=e=>{
     if(!drag||e.pointerId!==drag.id)return;
+    if(bar.classList.contains('mini')){drag=null;setMini(false);return}
     bar.classList.remove('drag');bar.querySelectorAll('button').forEach(b=>b.style.color='');
     const nb=nearest(e.clientX);drag=null;
     if(nb){indPos=null;if(nb.dataset.tab===tab)placeInd();goTab(nb.dataset.tab)}
