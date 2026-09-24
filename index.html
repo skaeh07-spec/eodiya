@@ -470,7 +470,8 @@ textarea{border:none}
 </div>
 
 <script>
-const APP_VER='0926-1';
+const APP_VER='0926-2';
+const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
 const PALETTE=['#0A84FF','#FF9F0A','#30D158','#BF5AF2','#FF375F','#64D2FF','#5E5CE6','#FFD60A'];
@@ -517,7 +518,7 @@ function fixMe(){
   state.friends=[main,...state.friends.filter(f=>f!==main)];
   return true;
 }
-function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct()}}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct();schedulePushSync()}}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -1191,7 +1192,7 @@ function viewMe(){
     const days=[...new Set(me.classes.flatMap(c=>c.days))].sort((a,b)=>a-b).map(d=>DAYS[d]).join('');
     h+=`<details class="panel fold mycls" data-fold="mycls"${openAttr('mycls',!me.classes.length||!!editCls)}><summary><b>내 수업</b><span class="sval">${me.classes.length}</span></summary><div class="mebody">${cardBody(me)}</div></details>`;
   }
-  h+=`<div class="gap"></div>`+acctHTML()+backupHTML();
+  h+=`<div class="gap"></div>`+pushHTML()+acctHTML()+backupHTML();
   return h+`<p class="ver sub">v${APP_VER}</p>`;
 }
 function friendCard(f){
@@ -1739,7 +1740,67 @@ function saveStatus(sh){
   if(!t){sh.querySelector('#stT').focus();return false}
   const d=(sh.querySelector('[data-sd][aria-pressed="true"]')||{}).dataset||{};
   let u;if(d.sd==='day'){const x=new Date();x.setHours(23,59,0,0);u=x.getTime()}else u=Date.now()+(+(d.sd||180))*60000;
-  me.status={e,t,u};save();flushPublish();render();toast(`${e} ${t}`);return true;
+  me.status={e,t,u};save();flushPublish();render();toast(`${e} ${t}`);notifyFriends(t);return true;
+}
+
+
+/* ---------- push notifications (friends' status) ---------- */
+const pushSupported=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+const pushOn=()=>!!(state.push&&state.push.on);
+function pushHTML(){
+  if(!PUSH_URL) return '';
+  let val,body;
+  if(!pushSupported()){val='사용 불가';body=isIOS&&!standalone()?'홈 화면에 추가한 앱에서 켤 수 있어요.':'이 브라우저는 알림을 지원하지 않아요.'}
+  else if(Notification.permission==='denied'){val='차단됨';body='폰 설정 → 알림에서 이 앱의 알림을 허용해 주세요.'}
+  else if(pushOn()){val='켜짐';body=`친구가 상태를 올리면 알려줘요.<div class="actions" style="margin-bottom:0"><button class="btn small" data-act="pushTest">테스트</button><button class="btn small danger" data-act="pushOff">끄기</button></div>`}
+  else{val='꺼짐';body=`친구가 "지금 뭐 해요?"를 올리면 알림이 와요.<div class="actions" style="margin-bottom:0"><button class="btn primary small" data-act="pushOnBtn">알림 켜기</button></div>`}
+  return `<details class="panel fold" data-fold="push"${openAttr('push',false)}><summary><b>친구 상태 알림</b><span class="sval">${val}</span></summary><div class="sub">${body}</div><p class="msg" id="push-msg"></p></details>`;
+}
+const pmsg=(t,c='')=>{const m=document.getElementById('push-msg');if(m){m.className='msg '+c;m.textContent=t}};
+async function pushSub(){const reg=await navigator.serviceWorker.ready;return reg.pushManager.getSubscription()}
+async function syncPush(sub){
+  if(!PUSH_URL||!pushOn()) return;
+  sub=sub||await pushSub(); if(!sub) return;
+  const follows=others().filter(f=>f.code).map(f=>f.code);
+  const r=await fetch(PUSH_URL+'/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:state.push.id,sub:sub.toJSON(),follows})});
+  if(!r.ok) throw new Error('subscribe '+r.status);
+  state.push.follows=follows.join(',');localSave();
+}
+let pushTimer=null;
+function schedulePushSync(){
+  if(!pushOn()) return;
+  const now=others().filter(f=>f.code).map(f=>f.code).join(',');
+  if(now===state.push.follows) return;
+  clearTimeout(pushTimer);pushTimer=setTimeout(()=>syncPush().catch(()=>{}),1500);
+}
+async function enablePush(){
+  try{
+    pmsg('알림 권한을 요청하는 중…');
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){pmsg('알림이 허용되지 않았어요.','err');render();return}
+    const reg=await navigator.serviceWorker.ready;
+    const {key}=await (await fetch(PUSH_URL+'/vapid')).json();
+    const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:unb64uBytes(key)});
+    state.push={on:true,id:(state.push&&state.push.id)||('d'+rand(20))};
+    await syncPush(sub);localSave();render();toast('🔔 친구 상태 알림을 켰어요');
+  }catch(e){console.warn(e);pmsg('알림을 켜지 못했어요. 인터넷 연결을 확인하고 다시 해주세요.','err')}
+}
+async function disablePush(){
+  try{
+    if(state.push&&state.push.id) await fetch(PUSH_URL+'/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:state.push.id})});
+    const sub=await pushSub();if(sub)await sub.unsubscribe();
+  }catch(e){}
+  state.push=Object.assign(state.push||{},{on:false});localSave();render();
+}
+function unb64uBytes(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}
+// after I post a status: ask the server to tell my friends (it double-checks Firestore itself)
+async function notifyFriends(t){
+  if(!PUSH_URL) return;
+  for(let i=0;i<5;i++){
+    await new Promise(r=>setTimeout(r,i?3000:1500));
+    const me=meOf();if(!me||!me.code) continue;
+    try{const r=await fetch(PUSH_URL+'/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:me.code,t})});if(r.status!==409)return}catch(e){}
+  }
 }
 
 /* ---------- photo cropper ---------- */
@@ -1860,6 +1921,9 @@ view.addEventListener('click',async e=>{
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
   if(d.act==='stOpen'){statusSheet();return}
+  if(d.act==='pushOnBtn'){enablePush();return}
+  if(d.act==='pushOff'){disablePush();return}
+  if(d.act==='pushTest'){(async()=>{try{const reg=await navigator.serviceWorker.ready;await reg.showNotification('어디야?',{body:'알림이 잘 와요! 🔔',icon:'icon-192.png',tag:'test'})}catch(e){pmsg('테스트 알림을 띄우지 못했어요.','err')}})();return}
   if(d.act==='cropAgain'){const me=meOf();if(!me)return;(lastCropImg?Promise.resolve(lastCropImg):loadImg(me.photo)).then(openCropper).catch(()=>{});return}
   if(d.act==='rmphoto'){const me=meOf();if(me){delete me.photo;save();flushPublish();render()}return}
   if(d.icsdl){const file=icsFile(d.icsdl),a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();

@@ -1,6 +1,6 @@
 /* 어디야? service worker: opens offline, always tries the newest version first */
-const SHELL = 'eodiya-shell-v1';
-const RUNTIME = 'eodiya-runtime-v1';
+const SHELL = 'eodiya-shell-v2';
+const RUNTIME = 'eodiya-runtime-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.png'];
 
 self.addEventListener('install', e => {
@@ -37,5 +37,21 @@ self.addEventListener('fetch', e => {
     const hit = await cache.match(req);
     const net = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()); return res; }).catch(() => hit);
     return hit || net;
+  }));
+});
+
+// push: a friend posted a status
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || '어디야?', {
+    body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag, renotify: true, data: { url: d.url || './' },
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) if ('focus' in c) return c.focus();
+    return clients.openWindow((e.notification.data && e.notification.data.url) || './');
   }));
 });
