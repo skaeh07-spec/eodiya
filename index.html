@@ -501,7 +501,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='0926-8';
+const APP_VER='0927-1';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -549,7 +549,7 @@ function fixMe(){
   state.friends=[main,...state.friends.filter(f=>f!==main)];
   return true;
 }
-function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct();schedulePushSync()}}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct();schedulePushSync();schedulePings()}}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -1043,6 +1043,7 @@ async function personFromText(text){
 }
 function addPerson(p){
   const me=meOf();
+  if(p.code&&state.removed)state.removed=state.removed.filter(c=>c!==p.code);
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
   if(me&&p.code&&me.code===p.code) return {kind:'me'};
   const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
@@ -1057,7 +1058,7 @@ function pendingHTML(){
   if(me&&(pending.uid===me.uid||(pending.code&&pending.code===me.code))) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
   const ex=others().find(f=>(pending.uid&&f.uid===pending.uid)||(pending.code&&f.code===pending.code));
   return `<div class="panel invite"><div class="big">👋</div>
-    <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':'친구로 추가할까요?'}</p>
+    <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':(meOf()&&meOf().code?'추가하면 서로 친구가 돼요.':'친구로 추가할까요?')}</p>
     <div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendYes">${ex?'업데이트':'추가하기'}</button><button class="btn" data-act="pendNo">취소</button></div>
     <p class="sub">홈 화면에 추가한 앱을 쓰고 있다면, 받은 메시지를 복사해서 앱의 친구 관리 → "친구 추가"에 붙여넣어 주세요. 브라우저와 앱은 저장 공간이 따로예요.</p></div>`;
 }
@@ -1522,7 +1523,7 @@ async function publishMe(){
     // read back to confirm what friends will actually receive
     try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===data}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
-    watchFriends();
+    watchFriends();schedulePings();
   }catch(e){console.warn('publish failed',e);setSync('error')}
   finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)&&FB.status!=='error') schedulePublish()}
 }
@@ -1563,6 +1564,7 @@ async function refreshAll(){
     await withTimeout(initFB(),15000);
     flushPublish();
     if(isGoogle()){await pushAcct();await pullAcct()}
+    await pullInbox();schedulePings();
     Object.keys(subs).forEach(c=>{subs[c]();delete subs[c]}); // re-open live connections
     await Promise.all(others().filter(f=>f.code).map(async f=>{
       try{const snap=await withTimeout(FB.db.collection('people').doc(f.code).get({source:'server'}),10000);
@@ -1589,6 +1591,10 @@ function watchFriends(){
       Object.keys(subs).filter(k=>k.startsWith('me:')).forEach(k=>{subs[k]();delete subs[k]});
       subs['me:'+me.code]=FB.db.collection('people').doc(me.code).onSnapshot(snap=>{if(snap.exists)applyMine(snap.data())},()=>{delete subs['me:'+me.code]});
     }
+    if(me&&me.code&&FB.auth&&FB.auth.currentUser&&!subs['inbox:'+me.code]){
+      Object.keys(subs).filter(k=>k.startsWith('inbox:')).forEach(k=>{subs[k]();delete subs[k]});
+      subs['inbox:'+me.code]=FB.db.collection('inbox').doc(me.code).collection('req').onSnapshot(q=>{if(!q.empty)handleInbox(q.docs)},()=>{delete subs['inbox:'+me.code]});
+    }
     const u=FB.auth&&FB.auth.currentUser;
     if(u&&!u.isAnonymous&&!subs['acct:'+u.uid]){
       subs['acct:'+u.uid]=FB.db.collection('users').doc(u.uid).onSnapshot(snap=>{
@@ -1601,6 +1607,59 @@ function watchFriends(){
     });
   }).catch(()=>{});
 }
+
+/* ---------- mutual friends (Instagram-style follow-back) ----------
+   When I add a friend, I drop a note in their inbox: inbox/{their code}/req/{my code}.
+   Their app reads the note, adds me back, and deletes it. Firestore rules let only
+   the owner of {my code} write the note and only the owner of {their code} read it. */
+const removedSet=()=>new Set(state.removed||[]);
+function josa(w,a,b){const c=String(w).charCodeAt(String(w).length-1);return w+(c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28?a:b)}
+let pingBusy=false;
+async function syncPings(){
+  const me=meOf(); if(!me||!me.code||pingBusy) return;
+  const sent=new Set((state.pinged||[]).filter(x=>x.startsWith(me.code+'>')));
+  const todo=others().filter(f=>f.code&&!f.gone&&!sent.has(me.code+'>'+f.code));
+  if(!todo.length) return;
+  pingBusy=true;
+  try{
+    await fbUser();
+    for(const f of todo){
+      try{
+        await withTimeout(FB.db.collection('inbox').doc(f.code).collection('req').doc(me.code).set({at:firebase.firestore.FieldValue.serverTimestamp()}),15000);
+        state.pinged=[...(state.pinged||[]).filter(x=>!x.endsWith('>'+f.code)),me.code+'>'+f.code].slice(-300);localSave();
+      }catch(e){if(e&&e.code==='permission-denied'&&/No document|not.?found/i.test(e.message||'')){}}
+    }
+  }catch(e){}finally{pingBusy=false}
+}
+let pingTimer=null;
+function schedulePings(){clearTimeout(pingTimer);pingTimer=setTimeout(()=>syncPings().catch(()=>{}),1200)}
+const inboxBusy=new Set();
+async function handleInbox(docs){
+  const me=meOf(); if(!me||!me.code) return;
+  const removed=removedSet();
+  for(const d of docs){
+    const from=d.id; if(inboxBusy.has(from)) continue; inboxBusy.add(from);
+    try{
+      const already=others().some(f=>f.code===from);
+      if(from!==me.code&&!already&&!removed.has(from)&&/^[a-z0-9]{8,12}$/.test(from)){
+        const p=await fetchPerson(from);
+        if(p){
+          const r=addPerson(p);
+          if(r.kind==='added'){toast(`${josa(p.name,'이가','가')} 나를 추가해서 서로 친구가 됐어요 👋`);state.pinged=[...(state.pinged||[]),me.code+'>'+from];localSave();render()}
+        }
+      }
+      await d.ref.delete().catch(()=>{});
+    }catch(e){}finally{inboxBusy.delete(from)}
+  }
+}
+async function pullInbox(){
+  const me=meOf(); if(!me||!me.code) return;
+  try{await authReady();if(!FB.auth.currentUser)return;
+    const snap=await withTimeout(FB.db.collection('inbox').doc(me.code).collection('req').get(),10000);
+    if(!snap.empty) await handleInbox(snap.docs);
+  }catch(e){}
+}
+
 let lastRefresh=0;
 async function refreshFriends(force){
   if(!force&&Date.now()-lastRefresh<30000) return;
@@ -1617,7 +1676,7 @@ function startSync(){
     FB.auth.onAuthStateChanged(()=>{if(tab==='me'&&!typing())render()});
     await authReady().catch(()=>{});
     if(isGoogle()) await pullAcct();
-    refreshFriends(true);watchFriends();
+    refreshFriends(true);watchFriends();pullInbox();schedulePings();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refreshFriends();schedulePublish()}else flushPublish()});
@@ -2029,7 +2088,7 @@ view.addEventListener('click',async e=>{
     if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지를 링크까지 통째로 붙여넣어 주세요. 인터넷 연결도 확인해 주세요.';return}
     const r=addPerson(p);render();
     const m2=document.getElementById('add-msg');m2.className='msg '+(r.kind==='me'?'err':'ok');
-    m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!`;
+    m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!${meOf()&&meOf().code?' 친구 쪽에도 내가 자동으로 추가돼요.':''}`;
     return;
   }
   if(d.act==='pendYes'){const r=addPerson(pending);pending=null;tab='now';render();if(r.kind==='me')return;return}
@@ -2084,7 +2143,8 @@ view.addEventListener('click',async e=>{
   if(d.delc){editCls=null;const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
   if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;
     {const f=state.friends.find(x=>x.id===d.delf);
-     if(f&&f.isMe&&f.code){const code=f.code;fbUser().then(()=>FB.db.collection('people').doc(code).delete()).catch(()=>{})}}state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();watchFriends();return}
+     if(f&&f.isMe&&f.code){const code=f.code;fbUser().then(()=>FB.db.collection('people').doc(code).delete()).catch(()=>{})}}{const f=state.friends.find(x=>x.id===d.delf);if(f&&!f.isMe&&f.code){state.removed=[...new Set([...(state.removed||[]),f.code])].slice(-300);state.pinged=(state.pinged||[]).filter(x=>!x.endsWith('>'+f.code))}}
+    state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();watchFriends();return}
 });
 view.addEventListener('change',e=>{
   const t=e.target;
