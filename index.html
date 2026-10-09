@@ -498,6 +498,7 @@ body.scrolled::before{opacity:0}
 .locbtn{border:none;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 8px;font-size:12px;margin-left:6px;font-weight:600;vertical-align:1px}
 .locbtn.old{color:var(--muted)}
 .mapcard .leaflet-container{font:inherit;background:var(--soft)}
+.mapbox.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.85) saturate(.6)}
 .mapcard .leaflet-popup-content-wrapper,.mapcard .leaflet-popup-tip{background:var(--panel);color:var(--ink)}
 .mapcard .leaflet-popup-content{margin:10px 14px;font-size:13.5px;line-height:1.4}
 .mapcard .leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
@@ -526,7 +527,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='1008-1';
+const APP_VER='1008-2';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1873,6 +1874,7 @@ function saveStatus(sh){
 const LOC_MAX_AGE=3*3600e3, LOC_FRESH=15*60e3, LEAFLET='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/';
 const locs={}, locSubs={};          // friend code -> {lat,lng,acc,at}
 let myPos=null, geoWatch=null, locLastSent=0, locOkAt=0, locLastPos=null, locSending=false, locErr='', locRT=null;
+let locReclaimed=false;
 let LMap=null, mapEl=null, mapMarkers={}, mapFitted=false, leafletP=null, tileLayer=null;
 const locOn=()=>!!state.locOn;
 const locTime=d=>d.at&&d.at.toMillis?d.at.toMillis():(+d.t||0);
@@ -1907,7 +1909,13 @@ async function sendLoc(force){
     const had=!!locErr||!locOkAt;locLastSent=locOkAt=Date.now();locLastPos={...myPos};locErr='';
     if(had&&tab==='now'&&!typing())render();
   }catch(e){
-    console.warn('loc send failed',e);locLastSent=Date.now(); // back off before retrying
+    console.warn('loc send failed',e);
+    if(e.code==='permission-denied'&&!locReclaimed&&me.secret){ // login changed since my code was made: take it back, then retry
+      locReclaimed=true;locSending=false;me.pubKey='';
+      try{await publishMe()}catch(x){}
+      return sendLoc(true);
+    }
+    locLastSent=Date.now(); // back off before retrying
     locErr=e.code==='permission-denied'?'Firebase 보안 규칙에 위치(locs) 규칙이 아직 없어요.':'위치를 올리지 못했어요. 인터넷 연결을 확인해 주세요.';
     if(tab==='now'&&!typing())render();
   }finally{locSending=false}
@@ -1966,9 +1974,9 @@ function setTiles(){
   if(!LMap) return; const dark=isDark();
   if(tileLayer&&tileLayer._dark===dark) return;
   if(tileLayer) LMap.removeLayer(tileLayer);
-  tileLayer=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?'dark':'light'}_all/{z}/{x}/{y}{r}.png`,{subdomains:'abcd',maxZoom:20,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'});
-  tileLayer._dark=dark;tileLayer.addTo(LMap);
+  tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
+  tileLayer._dark=dark;tileLayer.addTo(LMap);mapEl.classList.toggle('dark',dark);
 }
 function mountMap(){
   if(!document.getElementById('mapSlot')) return;
