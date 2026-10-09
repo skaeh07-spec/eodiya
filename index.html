@@ -476,6 +476,31 @@ body.scrolled::before{opacity:0}
 .topbar{-webkit-backdrop-filter:none;backdrop-filter:none;background:transparent;border-bottom-color:transparent;transition:opacity .2s,transform .2s,background .2s}
 .topbar.show{-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);background:var(--glass-bg);border-bottom-color:var(--line)}
 .row,.slot{animation:none}
+
+/* live location map */
+.mapcard{padding:0;overflow:hidden;margin-bottom:12px;position:relative;z-index:0}
+.maphead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px}
+.maphead b{font-size:16px}
+.mapcard .msg{margin:0 16px 12px}
+.mapwrap{position:relative}
+.mapbox{height:290px;background:var(--soft)}
+.mapfit{position:absolute;right:10px;top:10px;z-index:500;border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;background:var(--panel);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.locsw{flex:none;width:51px;height:31px;border-radius:999px;border:none;background:var(--line);position:relative;padding:0;transition:background .2s}
+.locsw span{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}
+.locsw.on{background:var(--free)}
+.locsw.on span{transform:translateX(20px)}
+.lpin{background:none;border:none}
+.lpin-b{width:40px;height:40px;border-radius:50%;padding:2px;background:var(--fc);box-shadow:0 3px 10px rgba(0,0,0,.3);position:relative}
+.lpin-b::after{content:"";position:absolute;left:50%;bottom:-5px;width:12px;height:12px;background:var(--fc);transform:translateX(-50%) rotate(45deg);z-index:-1}
+.lpin-b .avatar{width:36px;height:36px;font-size:15px;font-weight:700;border:2px solid #fff}
+.lpin-n{position:absolute;top:50px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--panel);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.lpin.old{opacity:.5}
+.locbtn{border:none;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 8px;font-size:12px;margin-left:6px;font-weight:600;vertical-align:1px}
+.locbtn.old{color:var(--muted)}
+.mapcard .leaflet-container{font:inherit;background:var(--soft)}
+.mapcard .leaflet-popup-content-wrapper,.mapcard .leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+.mapcard .leaflet-popup-content{margin:10px 14px;font-size:13.5px;line-height:1.4}
+.mapcard .leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -501,7 +526,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='0926-8';
+const APP_VER='1008-1';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -549,7 +574,7 @@ function fixMe(){
   state.friends=[main,...state.friends.filter(f=>f!==main)];
   return true;
 }
-function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct();schedulePushSync()}}
+function save(){try{localStorage.setItem('eodiya',JSON.stringify(state))}catch(e){} if(typeof schedulePublish==='function'){schedulePublish();scheduleAcct();schedulePushSync();schedulePings()}}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -1043,6 +1068,7 @@ async function personFromText(text){
 }
 function addPerson(p){
   const me=meOf();
+  if(p.code&&state.removed)state.removed=state.removed.filter(c=>c!==p.code);
   if(me&&p.uid&&me.uid===p.uid) return {kind:'me'};
   if(me&&p.code&&me.code===p.code) return {kind:'me'};
   const ex=others().find(f=>(p.uid&&f.uid===p.uid)||(p.code&&f.code===p.code));
@@ -1057,7 +1083,7 @@ function pendingHTML(){
   if(me&&(pending.uid===me.uid||(pending.code&&pending.code===me.code))) return `<div class="panel invite"><p>이건 내 시간표 링크예요. 친구한테 보내면 친구가 이 링크로 나를 추가할 수 있어요.</p><div class="actions"><button class="btn" data-act="pendNo">닫기</button></div></div>`;
   const ex=others().find(f=>(pending.uid&&f.uid===pending.uid)||(pending.code&&f.code===pending.code));
   return `<div class="panel invite"><div class="big">👋</div>
-    <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':'친구로 추가할까요?'}</p>
+    <p><b>${esc(pending.name)}</b>의 시간표가 도착했어요 (수업 ${pending.classes.length}개). ${ex?'이미 있는 친구라서 새 시간표로 바꿔요.':(meOf()&&meOf().code?'추가하면 서로 친구가 돼요.':'친구로 추가할까요?')}</p>
     <div class="actions" style="justify-content:center"><button class="btn primary" data-act="pendYes">${ex?'업데이트':'추가하기'}</button><button class="btn" data-act="pendNo">취소</button></div>
     <p class="sub">홈 화면에 추가한 앱을 쓰고 있다면, 받은 메시지를 복사해서 앱의 친구 관리 → "친구 추가"에 붙여넣어 주세요. 브라우저와 앱은 저장 공간이 따로예요.</p></div>`;
 }
@@ -1078,9 +1104,9 @@ function emptyHTML(){
   <div class="actions" style="justify-content:center"><button class="btn primary" data-act="goManage">${me?'내 시간표 공유하기':'내 시간표 만들기'}</button><button class="btn sunny" data-act="demo">예시로 둘러보기</button></div></div>`;
 }
 function viewNow(){
-  if(!others().length) return myStatusHTML()+emptyHTML();
+  if(!others().length) return myStatusHTML()+mapCardHTML()+emptyHTML();
   const r=ref();
-  const rows=others().filter(f=>f.classes.length||stActive(f.status)).map(f=>{
+  const rows=others().filter(f=>f.classes.length||stActive(f.status)||freshLoc(f)).map(f=>{
     const s=statusOf(f,r); let where,sub,badge;
     if(s.busy){
       where=esc(s.cur.loc||'강의실 미정');
@@ -1100,11 +1126,12 @@ function viewNow(){
     }
     const fst=live&&stActive(f.status);
     if(fst){sub=(s.busy?`${esc(s.cur.course)} 수업 시간 · `:'')+leftText(fst.u);where=`${esc(fst.e)} ${esc(fst.t)}`}
+    const lc=freshLoc(f), lb=lc?`<button class="locbtn${Date.now()-lc.at>LOC_FRESH?' old':''}" data-locf="${esc(f.code)}">📍 ${ago(lc.at)}</button>`:'';
     return {s,html:`<div class="row" style="--fc:${f.color}">${avatarHTML(f)}
-      <div><div class="who">${esc(dn(f))}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
+      <div><div class="who">${esc(dn(f))}${lb}</div><div class="where">${where}</div><div class="sub">${sub}</div></div>${badge}</div>`};
   });
   rows.sort((a,b)=>(a.s.busy-b.s.busy));
-  return myStatusHTML()+`<div class="panel">${live?'':`<p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준</p>`}<div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
+  return myStatusHTML()+mapCardHTML()+`<div class="panel">${live?'':`<p class="hint">${DAYS[r.day]}요일 ${fmt(r.min)} 기준</p>`}<div class="board">${rows.map(x=>x.html).join('')}</div></div>`;
 }
 let gridMode=null, gridDay=null, blkInfo=[];
 function layoutDay(items){
@@ -1275,6 +1302,7 @@ function render(){
   if(meOf()&&meOf().classes.length) shareLink().catch(()=>{});
   if(tab==='me') prepBackup();
   v.innerHTML=pendingHTML()+(tab==='now'?viewNow():tab==='grid'?viewGrid():tab==='free'?viewFree():tab==='me'?viewMe():viewManage());
+  if(tab==='now')mountMap();
   Object.entries(keep).forEach(([id,val])=>{const e=document.getElementById(id);if(e&&!e.value)e.value=val});
   if(focusId){const e=document.getElementById(focusId);if(e)e.focus()}
 }
@@ -1522,7 +1550,7 @@ async function publishMe(){
     // read back to confirm what friends will actually receive
     try{const back=await withTimeout(db.collection('people').doc(me.code).get({source:'server'}),10000);me.pubOk=back.exists&&back.data().data===data}catch(e){me.pubOk=false}
     me.pubKey=key;me.pubAt=Date.now();localSave();setSync('saved');
-    watchFriends();
+    watchFriends();schedulePings();
   }catch(e){console.warn('publish failed',e);setSync('error')}
   finally{pubRunning=false; const m=meOf(); if(m&&m.pubKey!==pubKeyOf(m)&&FB.status!=='error') schedulePublish()}
 }
@@ -1563,6 +1591,7 @@ async function refreshAll(){
     await withTimeout(initFB(),15000);
     flushPublish();
     if(isGoogle()){await pushAcct();await pullAcct()}
+    await pullInbox();schedulePings();
     Object.keys(subs).forEach(c=>{subs[c]();delete subs[c]}); // re-open live connections
     await Promise.all(others().filter(f=>f.code).map(async f=>{
       try{const snap=await withTimeout(FB.db.collection('people').doc(f.code).get({source:'server'}),10000);
@@ -1589,18 +1618,76 @@ function watchFriends(){
       Object.keys(subs).filter(k=>k.startsWith('me:')).forEach(k=>{subs[k]();delete subs[k]});
       subs['me:'+me.code]=FB.db.collection('people').doc(me.code).onSnapshot(snap=>{if(snap.exists)applyMine(snap.data())},()=>{delete subs['me:'+me.code]});
     }
+    if(me&&me.code&&FB.auth&&FB.auth.currentUser&&!subs['inbox:'+me.code]){
+      Object.keys(subs).filter(k=>k.startsWith('inbox:')).forEach(k=>{subs[k]();delete subs[k]});
+      subs['inbox:'+me.code]=FB.db.collection('inbox').doc(me.code).collection('req').onSnapshot(q=>{if(!q.empty)handleInbox(q.docs)},()=>{delete subs['inbox:'+me.code]});
+    }
     const u=FB.auth&&FB.auth.currentUser;
     if(u&&!u.isAnonymous&&!subs['acct:'+u.uid]){
       subs['acct:'+u.uid]=FB.db.collection('users').doc(u.uid).onSnapshot(snap=>{
         if(snap.exists&&snap.data().list!==state.acctList&&listPayload()===state.acctList) pullAcct();
       },()=>{delete subs['acct:'+u.uid]});
     }
+    watchLocs();
     codes.forEach(code=>{
       if(subs[code]) return;
       subs[code]=FB.db.collection('people').doc(code).onSnapshot(snap=>{if(snap.exists)applyRemote(code,snap.data());else markGone(code)},()=>{delete subs[code]});
     });
   }).catch(()=>{});
 }
+
+/* ---------- mutual friends (Instagram-style follow-back) ----------
+   When I add a friend, I drop a note in their inbox: inbox/{their code}/req/{my code}.
+   Their app reads the note, adds me back, and deletes it. Firestore rules let only
+   the owner of {my code} write the note and only the owner of {their code} read it. */
+const removedSet=()=>new Set(state.removed||[]);
+function josa(w,a,b){const c=String(w).charCodeAt(String(w).length-1);return w+(c>=0xAC00&&c<=0xD7A3&&(c-0xAC00)%28?a:b)}
+let pingBusy=false;
+async function syncPings(){
+  const me=meOf(); if(!me||!me.code||pingBusy) return;
+  const sent=new Set((state.pinged||[]).filter(x=>x.startsWith(me.code+'>')));
+  const todo=others().filter(f=>f.code&&!f.gone&&!sent.has(me.code+'>'+f.code));
+  if(!todo.length) return;
+  pingBusy=true;
+  try{
+    await fbUser();
+    for(const f of todo){
+      try{
+        await withTimeout(FB.db.collection('inbox').doc(f.code).collection('req').doc(me.code).set({at:firebase.firestore.FieldValue.serverTimestamp()}),15000);
+        state.pinged=[...(state.pinged||[]).filter(x=>!x.endsWith('>'+f.code)),me.code+'>'+f.code].slice(-300);localSave();
+      }catch(e){if(e&&e.code==='permission-denied'&&/No document|not.?found/i.test(e.message||'')){}}
+    }
+  }catch(e){}finally{pingBusy=false}
+}
+let pingTimer=null;
+function schedulePings(){clearTimeout(pingTimer);pingTimer=setTimeout(()=>syncPings().catch(()=>{}),1200)}
+const inboxBusy=new Set();
+async function handleInbox(docs){
+  const me=meOf(); if(!me||!me.code) return;
+  const removed=removedSet();
+  for(const d of docs){
+    const from=d.id; if(inboxBusy.has(from)) continue; inboxBusy.add(from);
+    try{
+      const already=others().some(f=>f.code===from);
+      if(from!==me.code&&!already&&!removed.has(from)&&/^[a-z0-9]{8,12}$/.test(from)){
+        const p=await fetchPerson(from);
+        if(p){
+          const r=addPerson(p);
+          if(r.kind==='added'){toast(`${josa(p.name,'이가','가')} 나를 추가해서 서로 친구가 됐어요 👋`);state.pinged=[...(state.pinged||[]),me.code+'>'+from];localSave();render()}
+        }
+      }
+      await d.ref.delete().catch(()=>{});
+    }catch(e){}finally{inboxBusy.delete(from)}
+  }
+}
+async function pullInbox(){
+  const me=meOf(); if(!me||!me.code) return;
+  try{await authReady();if(!FB.auth.currentUser)return;
+    const snap=await withTimeout(FB.db.collection('inbox').doc(me.code).collection('req').get(),10000);
+    if(!snap.empty) await handleInbox(snap.docs);
+  }catch(e){}
+}
+
 let lastRefresh=0;
 async function refreshFriends(force){
   if(!force&&Date.now()-lastRefresh<30000) return;
@@ -1617,7 +1704,7 @@ function startSync(){
     FB.auth.onAuthStateChanged(()=>{if(tab==='me'&&!typing())render()});
     await authReady().catch(()=>{});
     if(isGoogle()) await pullAcct();
-    refreshFriends(true);watchFriends();
+    refreshFriends(true);watchFriends();pullInbox();schedulePings();
     const me=meOf(); if(me&&me.classes.length&&(!me.code||me.pubKey!==pubKeyOf(me))) publishMe();
   }).catch(()=>setSync('error'));
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refreshFriends();schedulePublish()}else flushPublish()});
@@ -1773,6 +1860,167 @@ function saveStatus(sh){
   let u;if(d.sd==='day'){const x=new Date();x.setHours(23,59,0,0);u=x.getTime()}else u=Date.now()+(+(d.sd||180))*60000;
   me.status={e,t,u};save();flushPublish();render();toast(`${e} ${t}`);notifyFriends(t);return true;
 }
+
+/* ---------- live location map (Leaflet + OpenStreetMap / CARTO tiles, no API key) ----------
+   Firestore: locs/{my code} = {owner, lat, lng, acc, t, at}. Written only while
+   "위치 공유" is on and the app is open; deleted when it is turned off.
+   Rule needed in Firebase (Firestore → 규칙):
+     match /locs/{code} {
+       allow read: if request.auth != null;
+       allow write: if request.auth != null
+         && get(/databases/$(database)/documents/people/$(code)).data.owner == request.auth.uid;
+     }  */
+const LOC_MAX_AGE=3*3600e3, LOC_FRESH=15*60e3, LEAFLET='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/';
+const locs={}, locSubs={};          // friend code -> {lat,lng,acc,at}
+let myPos=null, geoWatch=null, locLastSent=0, locOkAt=0, locLastPos=null, locSending=false, locErr='', locRT=null;
+let LMap=null, mapEl=null, mapMarkers={}, mapFitted=false, leafletP=null, tileLayer=null;
+const locOn=()=>!!state.locOn;
+const locTime=d=>d.at&&d.at.toMillis?d.at.toMillis():(+d.t||0);
+const freshLoc=f=>{const l=f&&f.code&&locs[f.code];return l&&Date.now()-l.at<LOC_MAX_AGE?l:null};
+function distM(a,b){const R=6371e3,r=Math.PI/180,dla=(b.lat-a.lat)*r,dlo=(b.lng-a.lng)*r;
+  const x=Math.sin(dla/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+
+function startGeo(){
+  if(!locOn()||geoWatch!==null||!('geolocation' in navigator)||document.visibilityState!=='visible') return;
+  geoWatch=navigator.geolocation.watchPosition(p=>{
+    const first=!myPos;
+    myPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy||0),at:Date.now()};
+    if(locErr&&!/규칙/.test(locErr))locErr='';
+    updateMap();sendLoc(false);
+    if(first&&tab==='now'&&!typing())render();
+  },e=>{
+    if(e.code===1){locErr='위치 권한이 꺼져 있어요. 폰 설정에서 이 앱(또는 Safari·Chrome)의 위치 접근을 허용해 주세요.';setLocOn(false,true);return}
+    locErr='위치를 아직 못 잡았어요. 조금 뒤에 다시 시도해요.';
+    if(tab==='now'&&!typing())render();
+  },{enableHighAccuracy:true,maximumAge:15000,timeout:30000});
+}
+function stopGeo(){if(geoWatch!==null){navigator.geolocation.clearWatch(geoWatch);geoWatch=null}}
+async function sendLoc(force){
+  const me=meOf(); if(!locOn()||!myPos||!me||!me.code||locSending) return;
+  const moved=!locLastPos||distM(locLastPos,myPos)>=25, since=Date.now()-locLastSent;
+  if(!force&&!(moved&&since>=15000)&&since<120000) return;   // moved 25m+ (max every 15s), or a 2-min heartbeat
+  locSending=true;
+  try{
+    const u=await fbUser();
+    await withTimeout(FB.db.collection('locs').doc(me.code).set({owner:u.uid,lat:+myPos.lat.toFixed(5),lng:+myPos.lng.toFixed(5),
+      acc:Math.min(myPos.acc,9999),t:Date.now(),at:firebase.firestore.FieldValue.serverTimestamp()}),15000);
+    const had=!!locErr||!locOkAt;locLastSent=locOkAt=Date.now();locLastPos={...myPos};locErr='';
+    if(had&&tab==='now'&&!typing())render();
+  }catch(e){
+    console.warn('loc send failed',e);locLastSent=Date.now(); // back off before retrying
+    locErr=e.code==='permission-denied'?'Firebase 보안 규칙에 위치(locs) 규칙이 아직 없어요.':'위치를 올리지 못했어요. 인터넷 연결을 확인해 주세요.';
+    if(tab==='now'&&!typing())render();
+  }finally{locSending=false}
+}
+function setLocOn(on,quiet){
+  const me=meOf();
+  state.locOn=on;localSave();
+  if(on){
+    locErr='';
+    if(!('geolocation' in navigator)){locErr='이 브라우저는 위치 기능을 지원하지 않아요.';state.locOn=false;localSave();render();return}
+    startGeo();toast('📍 위치 공유를 켰어요');
+  }else{
+    stopGeo();myPos=null;locLastPos=null;locLastSent=locOkAt=0;
+    if(me&&me.code) fbUser().then(()=>FB.db.collection('locs').doc(me.code).delete()).catch(()=>{});
+    if(!quiet)toast('위치 공유를 껐어요');
+  }
+  updateMap();render();
+}
+function watchLocs(){
+  if(!FB.db) return;
+  const codes=new Set(others().filter(f=>f.code).map(f=>f.code));
+  Object.keys(locSubs).forEach(c=>{if(!codes.has(c)){locSubs[c]();delete locSubs[c];delete locs[c]}});
+  codes.forEach(code=>{
+    if(locSubs[code]) return;
+    locSubs[code]=FB.db.collection('locs').doc(code).onSnapshot(snap=>{
+      const d=snap.exists&&snap.data();
+      if(d&&isFinite(d.lat)&&isFinite(d.lng)) locs[code]={lat:+d.lat,lng:+d.lng,acc:+d.acc||0,at:locTime(d)};
+      else delete locs[code];
+      updateMap();clearTimeout(locRT);locRT=setTimeout(()=>{if(tab==='now'&&!typing())render()},300);
+    },()=>{delete locSubs[code]});
+  });
+}
+
+function mapCardHTML(){
+  const me=meOf(); if(!me) return '';
+  const on=locOn(), pins=others().filter(freshLoc).length;
+  let sub;
+  if(!me.code) sub='내 시간표를 먼저 공유하면 위치도 보낼 수 있어요.';
+  else if(on) sub=!myPos?'내 위치 찾는 중…':locOkAt?`내 위치 공유 중 · ${ago(locOkAt)} 업데이트`:'내 위치 올리는 중…';
+  else sub=pins?`친구 ${pins}명이 위치를 보내는 중`:'켜면 앱을 열어둔 동안 친구들한테 내 위치가 보여요.';
+  return `<div class="panel mapcard"><div class="maphead"><div><b>📍 지도</b><div class="sub">${esc(sub)}</div></div>
+    ${me.code?`<button class="locsw${on?' on':''}" data-act="${on?'locOff':'locOn'}" role="switch" aria-checked="${on}" aria-label="내 위치 공유"><span></span></button>`:''}</div>
+    ${locErr?`<p class="msg err">${esc(locErr)}</p>`:''}
+    ${on||pins?`<div class="mapwrap"><div id="mapSlot" class="mapbox"></div><button class="mapfit" data-act="mapFit">전체 보기</button></div>`:''}</div>`;
+}
+function loadLeaflet(){
+  if(window.L&&L.map) return Promise.resolve();
+  if(!leafletP){
+    if(!document.getElementById('leafletCss')){const c=document.createElement('link');c.id='leafletCss';c.rel='stylesheet';c.href=LEAFLET+'leaflet.css';document.head.appendChild(c)}
+    leafletP=loadScript(LEAFLET+'leaflet.js').catch(e=>{leafletP=null;throw e});
+  }
+  return leafletP;
+}
+const isDark=()=>{const t=document.documentElement.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches};
+function setTiles(){
+  if(!LMap) return; const dark=isDark();
+  if(tileLayer&&tileLayer._dark===dark) return;
+  if(tileLayer) LMap.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?'dark':'light'}_all/{z}/{x}/{y}{r}.png`,{subdomains:'abcd',maxZoom:20,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'});
+  tileLayer._dark=dark;tileLayer.addTo(LMap);
+}
+function mountMap(){
+  if(!document.getElementById('mapSlot')) return;
+  loadLeaflet().then(()=>{
+    const slot=document.getElementById('mapSlot'); if(!slot) return;
+    if(!mapEl){
+      mapEl=document.createElement('div');mapEl.className='mapbox';slot.replaceWith(mapEl);
+      LMap=L.map(mapEl,{zoomControl:false}).setView([43.4723,-80.5449],15);
+      LMap.attributionControl.setPrefix(false);setTiles();
+      matchMedia('(prefers-color-scheme: dark)').addEventListener('change',setTiles);
+    }else slot.replaceWith(mapEl);
+    LMap.invalidateSize();updateMap();
+  }).catch(()=>{const s=document.getElementById('mapSlot');if(s)s.innerHTML='<p class="sub" style="padding:16px;margin:0">지도를 불러오지 못했어요.</p>'});
+}
+function pinIcon(f,old){
+  return L.divIcon({className:'lpin'+(old?' old':''),iconSize:[40,40],iconAnchor:[20,46],popupAnchor:[0,-44],
+    html:`<div class="lpin-b" style="--fc:${f.color}">${avatarHTML(f,'avatar')}</div><span class="lpin-n">${esc(label(f))}</span>`});
+}
+function updateMap(){
+  if(!LMap) return;
+  setTiles();
+  const items=[];
+  others().forEach(f=>{const l=freshLoc(f);if(l)items.push({k:f.code,f,l})});
+  const me=meOf();
+  if(me&&locOn()&&myPos) items.push({k:'__me',f:me,l:myPos,mine:true});
+  const seen=new Set();
+  items.forEach(({k,f,l,mine})=>{
+    seen.add(k);
+    const old=!mine&&Date.now()-l.at>LOC_FRESH, sig=[f.color,phash(okPhoto(f.photo)),label(f),old].join('|');
+    let m=mapMarkers[k];
+    if(!m) m=mapMarkers[k]={sig,mk:L.marker([l.lat,l.lng],{icon:pinIcon(f,old),zIndexOffset:mine?1000:0}).addTo(LMap),
+      circle:L.circle([l.lat,l.lng],{radius:0,color:f.color,weight:1,opacity:.45,fillOpacity:.1,interactive:false}).addTo(LMap)};
+    else{m.mk.setLatLng([l.lat,l.lng]);m.circle.setLatLng([l.lat,l.lng]);if(m.sig!==sig){m.mk.setIcon(pinIcon(f,old));m.sig=sig}}
+    m.circle.setRadius(l.acc&&l.acc<500?l.acc:0);m.circle.setStyle({color:f.color});
+    const html=`<b>${esc(label(f))}</b><br><span class="sub">${mine?'내 위치':ago(l.at)}${l.acc?` · 오차 ±${l.acc}m`:''}</span>`;
+    if(m.mk.getPopup())m.mk.setPopupContent(html);else m.mk.bindPopup(html,{closeButton:false});
+  });
+  Object.keys(mapMarkers).forEach(k=>{if(!seen.has(k)){LMap.removeLayer(mapMarkers[k].mk);LMap.removeLayer(mapMarkers[k].circle);delete mapMarkers[k]}});
+  if(!mapFitted&&items.length){mapFitted=true;fitMap()}
+}
+function fitMap(){
+  if(!LMap) return; const ll=Object.values(mapMarkers).map(m=>m.mk.getLatLng());
+  if(!ll.length) return;
+  if(ll.length===1) LMap.setView(ll[0],16); else LMap.fitBounds(L.latLngBounds(ll),{padding:[50,50],maxZoom:17});
+}
+function focusPin(code){
+  const m=mapMarkers[code]; if(!m||!LMap) return;
+  mapEl.scrollIntoView({behavior:'smooth',block:'center'});
+  LMap.flyTo(m.mk.getLatLng(),17,{duration:.6});setTimeout(()=>m.mk.openPopup(),700);
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){startGeo();sendLoc(false)}else stopGeo()});
+setInterval(()=>{if(locOn()&&document.visibilityState==='visible')sendLoc(false)},60000);
 
 
 /* ---------- push notifications (friends' status) ---------- */
@@ -1978,6 +2226,10 @@ view.addEventListener('click',async e=>{
   if(d.act==='demo'){demo();return}
   if(d.act==='add'){addFriend();return}
   if(d.act==='stOpen'){statusSheet();return}
+  if(d.act==='locOn'){setLocOn(true);return}
+  if(d.act==='locOff'){setLocOn(false);return}
+  if(d.act==='mapFit'){fitMap();return}
+  if(d.locf){focusPin(d.locf);return}
   if(d.act==='pushOnBtn'){enablePush();return}
   if(d.act==='pushOff'){disablePush();return}
   if(d.act==='pushTest'){(async()=>{try{const reg=await navigator.serviceWorker.ready;await reg.showNotification('어디야?',{body:'알림이 잘 와요! 🔔',icon:'icon-192.png',tag:'test'})}catch(e){pmsg('테스트 알림을 띄우지 못했어요.','err')}})();return}
@@ -2029,7 +2281,7 @@ view.addEventListener('click',async e=>{
     if(!p){m.className='msg err';m.textContent='공유 링크를 찾지 못했어요. 친구가 보낸 메시지를 링크까지 통째로 붙여넣어 주세요. 인터넷 연결도 확인해 주세요.';return}
     const r=addPerson(p);render();
     const m2=document.getElementById('add-msg');m2.className='msg '+(r.kind==='me'?'err':'ok');
-    m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!`;
+    m2.textContent=r.kind==='me'?'이건 내 시간표 링크예요.':r.kind==='updated'?`${r.f.name}의 시간표를 새로 바꿨어요.`:`${r.f.name}을(를) 친구로 추가했어요!${meOf()&&meOf().code?' 친구 쪽에도 내가 자동으로 추가돼요.':''}`;
     return;
   }
   if(d.act==='pendYes'){const r=addPerson(pending);pending=null;tab='now';render();if(r.kind==='me')return;return}
@@ -2084,7 +2336,8 @@ view.addEventListener('click',async e=>{
   if(d.delc){editCls=null;const [fid,cid]=d.delc.split(':');const f=state.friends.find(x=>x.id===fid);f.classes=f.classes.filter(c=>c.id!==cid);save();render();return}
   if(d.delf){if(!armed2(t,'del'+d.delf,'한 번 더 누르면 삭제돼요'))return;
     {const f=state.friends.find(x=>x.id===d.delf);
-     if(f&&f.isMe&&f.code){const code=f.code;fbUser().then(()=>FB.db.collection('people').doc(code).delete()).catch(()=>{})}}state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();watchFriends();return}
+     if(f&&f.isMe&&f.code){const code=f.code;if(locOn()){state.locOn=false;stopGeo();myPos=null}fbUser().then(()=>FB.db.collection('locs').doc(code).delete().catch(()=>{})).then(()=>FB.db.collection('people').doc(code).delete()).catch(()=>{})}}{const f=state.friends.find(x=>x.id===d.delf);if(f&&!f.isMe&&f.code){state.removed=[...new Set([...(state.removed||[]),f.code])].slice(-300);state.pinged=(state.pinged||[]).filter(x=>!x.endsWith('>'+f.code))}}
+    state.friends=state.friends.filter(x=>x.id!==d.delf);sel&&sel.delete(d.delf);openId=null;save();render();watchFriends();return}
 });
 view.addEventListener('change',e=>{
   const t=e.target;
@@ -2123,7 +2376,7 @@ document.getElementById('sheet').addEventListener('click',e=>{
   if(e.target.id==='sheet'||(t&&t.dataset.act==='sheetClose')){sh.hidden=true;return}
   if(t&&(t.dataset.skip!==undefined||t.dataset.offb!==undefined)) toggleBlk(t.dataset);
 });
-load(); render(); checkHash(); startSync(); netBadge();
+load(); render(); checkHash(); startSync(); netBadge(); startGeo();
 window.addEventListener('hashchange',()=>checkHash());
 setInterval(()=>{if(live&&tab!=='manage'&&tab!=='me'&&!typing())render()},30000);
 </script>
