@@ -483,8 +483,29 @@ body.scrolled::before{opacity:0}
 .maphead b{font-size:16px}
 .mapcard .msg{margin:0 16px 12px}
 .mapwrap{position:relative}
-.mapbox{height:290px;background:var(--soft)}
-.mapfit{position:absolute;right:10px;top:10px;z-index:500;border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;background:var(--panel);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.mapbox{height:240px;background:var(--soft);isolation:isolate}
+.mapopen{position:absolute;inset:0;z-index:5;border:none;background:transparent;padding:0;display:flex;align-items:flex-end;justify-content:flex-end;-webkit-tap-highlight-color:transparent}
+.mapopen span{margin:0 10px 24px 0;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;background:var(--panel);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.nearrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px 12px;flex-wrap:wrap}
+.nearrow .seg{margin:0}
+#mapFull{position:fixed;inset:0;z-index:35;background:var(--bg);display:flex;flex-direction:column}
+#mapFull[hidden]{display:none}
+.mf-top{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:var(--panel);box-shadow:0 1px 0 var(--line)}
+.mf-top b{font-size:17px}
+.mf-top .sub{margin-left:auto;font-size:12.5px;text-align:right;line-height:1.3}
+.mf-x{width:36px;height:36px;border-radius:50%;border:none;background:var(--soft);color:var(--ink);font-size:16px;flex:none;display:grid;place-items:center}
+#mfMap{flex:1;position:relative;min-height:0}
+#mfMap .mapbox{position:absolute!important;inset:0;height:auto}
+.mf-btns{position:absolute;right:14px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:5;display:flex;flex-direction:column;gap:10px}
+.mf-btns button{width:46px;height:46px;border-radius:50%;border:none;background:var(--panel);color:var(--ink);box-shadow:0 3px 12px rgba(0,0,0,.25);display:grid;place-items:center;padding:0}
+.mf-btns svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mf-people{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;gap:8px;overflow-x:auto;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));scrollbar-width:none}
+.mf-people::-webkit-scrollbar{display:none}
+.mfp{flex:none;display:flex;align-items:center;gap:8px;border:none;background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 14px 5px 5px;box-shadow:0 3px 12px rgba(0,0,0,.22);text-align:left}
+.mfp .avatar{width:32px;height:32px;font-size:13px}
+.mfp b{display:block;font-size:13.5px;line-height:1.2}
+.mfp .sub{display:block;font-size:11.5px;line-height:1.2}
+.mfp.old{opacity:.6}
 .locsw{flex:none;width:51px;height:31px;border-radius:999px;border:none;background:var(--line);position:relative;padding:0;transition:background .2s}
 .locsw span{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}
 .locsw.on{background:var(--free)}
@@ -497,11 +518,12 @@ body.scrolled::before{opacity:0}
 .lpin.old{opacity:.5}
 .locbtn{border:none;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 8px;font-size:12px;margin-left:6px;font-weight:600;vertical-align:1px}
 .locbtn.old{color:var(--muted)}
-.mapcard .leaflet-container{font:inherit;background:var(--soft)}
+.mapbox.leaflet-container{font:inherit;background:var(--soft)}
+#mfMap .leaflet-bottom.leaflet-right{bottom:auto;top:0}
 .mapbox.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.85) saturate(.6)}
-.mapcard .leaflet-popup-content-wrapper,.mapcard .leaflet-popup-tip{background:var(--panel);color:var(--ink)}
-.mapcard .leaflet-popup-content{margin:10px 14px;font-size:13.5px;line-height:1.4}
-.mapcard .leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
+.mapbox .leaflet-popup-content-wrapper,.mapbox .leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+.mapbox .leaflet-popup-content{margin:10px 14px;font-size:13.5px;line-height:1.4}
+.mapbox.leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -527,7 +549,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='1008-2';
+const APP_VER='1008-3';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1888,7 +1910,7 @@ function startGeo(){
     const first=!myPos;
     myPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy||0),at:Date.now()};
     if(locErr&&!/규칙/.test(locErr))locErr='';
-    updateMap();sendLoc(false);
+    updateMap();sendLoc(false);checkNear();
     if(first&&tab==='now'&&!typing())render();
   },e=>{
     if(e.code===1){locErr='위치 권한이 꺼져 있어요. 폰 설정에서 이 앱(또는 Safari·Chrome)의 위치 접근을 허용해 주세요.';setLocOn(false,true);return}
@@ -1928,7 +1950,7 @@ function setLocOn(on,quiet){
     if(!('geolocation' in navigator)){locErr='이 브라우저는 위치 기능을 지원하지 않아요.';state.locOn=false;localSave();render();return}
     startGeo();toast('📍 위치 공유를 켰어요');
   }else{
-    stopGeo();myPos=null;locLastPos=null;locLastSent=locOkAt=0;
+    stopGeo();myPos=null;locLastPos=null;locLastSent=locOkAt=0;state.nearIn={};
     if(me&&me.code) fbUser().then(()=>FB.db.collection('locs').doc(me.code).delete()).catch(()=>{});
     if(!quiet)toast('위치 공유를 껐어요');
   }
@@ -1944,7 +1966,7 @@ function watchLocs(){
       const d=snap.exists&&snap.data();
       if(d&&isFinite(d.lat)&&isFinite(d.lng)) locs[code]={lat:+d.lat,lng:+d.lng,acc:+d.acc||0,at:locTime(d)};
       else delete locs[code];
-      updateMap();clearTimeout(locRT);locRT=setTimeout(()=>{if(tab==='now'&&!typing())render()},300);
+      updateMap();checkNear();clearTimeout(locRT);locRT=setTimeout(()=>{if(tab==='now'&&!typing())render()},300);
     },()=>{delete locSubs[code]});
   });
 }
@@ -1959,7 +1981,8 @@ function mapCardHTML(){
   return `<div class="panel mapcard"><div class="maphead"><div><b>📍 지도</b><div class="sub">${esc(sub)}</div></div>
     ${me.code?`<button class="locsw${on?' on':''}" data-act="${on?'locOff':'locOn'}" role="switch" aria-checked="${on}" aria-label="내 위치 공유"><span></span></button>`:''}</div>
     ${locErr?`<p class="msg err">${esc(locErr)}</p>`:''}
-    ${on||pins?`<div class="mapwrap"><div id="mapSlot" class="mapbox"></div><button class="mapfit" data-act="mapFit">전체 보기</button></div>`:''}</div>`;
+    ${on?nearRowHTML():''}
+    ${on||pins?`<div class="mapwrap"><div id="mapSlot" class="mapbox"></div><button class="mapopen" data-act="mapOpen" aria-label="지도 크게 보기"><span>⤢ 크게 보기</span></button></div>`:''}</div>`;
 }
 function loadLeaflet(){
   if(window.L&&L.map) return Promise.resolve();
@@ -1979,16 +2002,17 @@ function setTiles(){
   tileLayer._dark=dark;tileLayer.addTo(LMap);mapEl.classList.toggle('dark',dark);
 }
 function mountMap(){
-  if(!document.getElementById('mapSlot')) return;
+  if(mapFull||!document.getElementById('mapSlot')) return;
   loadLeaflet().then(()=>{
     const slot=document.getElementById('mapSlot'); if(!slot) return;
     if(!mapEl){
       mapEl=document.createElement('div');mapEl.className='mapbox';slot.replaceWith(mapEl);
-      LMap=L.map(mapEl,{zoomControl:false}).setView([43.4723,-80.5449],15);
+      LMap=L.map(mapEl,{zoomControl:false,zoomSnap:.25,zoomDelta:.5,wheelPxPerZoomLevel:100,bounceAtZoomLimits:false,
+        tapTolerance:20,inertiaDeceleration:2400,inertiaMaxSpeed:1800,maxBoundsViscosity:1}).setView([43.4723,-80.5449],15);
       LMap.attributionControl.setPrefix(false);setTiles();
       matchMedia('(prefers-color-scheme: dark)').addEventListener('change',setTiles);
     }else slot.replaceWith(mapEl);
-    LMap.invalidateSize();updateMap();
+    applyMapMode();LMap.invalidateSize();updateMap();fitMap(false);
   }).catch(()=>{const s=document.getElementById('mapSlot');if(s)s.innerHTML='<p class="sub" style="padding:16px;margin:0">지도를 불러오지 못했어요.</p>'});
 }
 function pinIcon(f,old){
@@ -2015,18 +2039,107 @@ function updateMap(){
     if(m.mk.getPopup())m.mk.setPopupContent(html);else m.mk.bindPopup(html,{closeButton:false});
   });
   Object.keys(mapMarkers).forEach(k=>{if(!seen.has(k)){LMap.removeLayer(mapMarkers[k].mk);LMap.removeLayer(mapMarkers[k].circle);delete mapMarkers[k]}});
-  if(!mapFitted&&items.length){mapFitted=true;fitMap()}
+  if(mapFull) peopleBar(items);
+  else if(items.length) fitMap(false);   // the small card always shows everyone
 }
-function fitMap(){
+function fitMap(animate=true){
   if(!LMap) return; const ll=Object.values(mapMarkers).map(m=>m.mk.getLatLng());
   if(!ll.length) return;
-  if(ll.length===1) LMap.setView(ll[0],16); else LMap.fitBounds(L.latLngBounds(ll),{padding:[50,50],maxZoom:17});
+  if(ll.length===1) LMap.setView(ll[0],16,{animate}); else LMap.fitBounds(L.latLngBounds(ll),{padding:mapFull?[70,70]:[40,40],maxZoom:17,animate});
 }
 function focusPin(code){
-  const m=mapMarkers[code]; if(!m||!LMap) return;
-  mapEl.scrollIntoView({behavior:'smooth',block:'center'});
-  LMap.flyTo(m.mk.getLatLng(),17,{duration:.6});setTimeout(()=>m.mk.openPopup(),700);
+  if(!LMap) return;
+  if(!mapFull) openMapFull();
+  const m=mapMarkers[code]; if(!m) return;
+  setTimeout(()=>{LMap.flyTo(m.mk.getLatLng(),17,{duration:.5});setTimeout(()=>m.mk.openPopup(),550)},mapFull?60:0);
 }
+
+/* card = still preview (tap to open), full screen = free pan/zoom */
+let mapFull=false, mfEl=null, ignorePop=false;
+function applyMapMode(){
+  if(!LMap) return;
+  [LMap.dragging,LMap.touchZoom,LMap.doubleClickZoom,LMap.scrollWheelZoom,LMap.boxZoom,LMap.keyboard].forEach(h=>h&&(mapFull?h.enable():h.disable()));
+}
+const MF_ICON={
+  me:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>',
+  fit:'<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'};
+function openMapFull(){
+  if(mapFull||!LMap||!mapEl) return;
+  if(!mfEl){
+    mfEl=document.createElement('div');mfEl.id='mapFull';mfEl.hidden=true;
+    mfEl.innerHTML=`<div class="mf-top"><button class="mf-x" data-mf="close" aria-label="닫기">✕</button><b>📍 지도</b><span class="sub" id="mfSub"></span></div>
+      <div id="mfMap"><div class="mf-btns"><button data-mf="me" aria-label="내 위치로">${MF_ICON.me}</button><button data-mf="fit" aria-label="모두 보기">${MF_ICON.fit}</button></div><div class="mf-people" id="mfPeople"></div></div>`;
+    document.body.appendChild(mfEl);
+    mfEl.addEventListener('click',e=>{
+      const b=e.target.closest('[data-mf],[data-mfp]'); if(!b) return;
+      if(b.dataset.mf==='close') closeMapFull(false);
+      else if(b.dataset.mf==='fit') fitMap(true);
+      else if(b.dataset.mf==='me'){if(myPos)LMap.flyTo([myPos.lat,myPos.lng],17,{duration:.5});else toast('위치 공유를 켜면 내 위치가 보여요')}
+      else if(b.dataset.mfp){const m=mapMarkers[b.dataset.mfp];if(m){LMap.flyTo(m.mk.getLatLng(),17,{duration:.5});setTimeout(()=>m.mk.openPopup(),550)}}
+    });
+  }
+  mapFull=true;mfEl.hidden=false;document.body.style.overflow='hidden';
+  mfEl.querySelector('#mfMap').prepend(mapEl);
+  const sub=document.querySelector('.mapcard .maphead .sub');mfEl.querySelector('#mfSub').textContent=sub?sub.textContent:'';
+  applyMapMode();LMap.invalidateSize();updateMap();fitMap(false);
+  try{history.pushState({mapFull:1},'')}catch(e){}
+}
+function closeMapFull(fromPop){
+  if(!mapFull) return;
+  mapFull=false;mfEl.hidden=true;document.body.style.overflow='';LMap.closePopup();
+  applyMapMode();render();
+  if(!fromPop&&history.state&&history.state.mapFull){ignorePop=true;history.back()}
+}
+window.addEventListener('popstate',()=>{if(ignorePop){ignorePop=false;return}if(mapFull)closeMapFull(true)});
+function peopleBar(items){
+  const box=mfEl&&mfEl.querySelector('#mfPeople'); if(!box) return;
+  items=items.slice().sort((a,b)=>(b.mine?1:0)-(a.mine?1:0)||b.l.at-a.l.at);
+  box.innerHTML=items.map(({k,f,l,mine})=>`<button class="mfp${!mine&&Date.now()-l.at>LOC_FRESH?' old':''}" data-mfp="${esc(k)}">${avatarHTML(f,'avatar')}<span><b>${esc(label(f))}</b><span class="sub">${mine?'내 위치':ago(l.at)}${!mine&&myPos?' · '+fmtDist(distM(myPos,l)):''}</span></span></button>`).join('');
+}
+const fmtDist=m=>m<1000?Math.round(m/10)*10+'m':(m/1000).toFixed(1)+'km';
+
+/* ---------- "friend nearby" alert ----------
+   Checked on this phone whenever my position or a friend's position changes,
+   so it works while both of us have the app open with sharing on. */
+const NEAR_FRESH=10*60e3, NEAR_COOLDOWN=60*60e3, NEAR_OPTS=[0,100,250,500];
+const nearR=()=>state.nearR===undefined?250:+state.nearR;
+function nearRowHTML(){
+  const R=nearR();
+  return `<div class="nearrow"><span class="sub">👋 친구가 가까이 오면 알림</span><div class="seg">${NEAR_OPTS.map(v=>`<button data-near="${v}" aria-pressed="${R===v}">${v?v+'m':'끔'}</button>`).join('')}</div></div>`;
+}
+async function setNear(v){
+  state.nearR=v;state.nearIn={};localSave();render();
+  if(v&&'Notification' in window&&Notification.permission==='default'){try{await Notification.requestPermission()}catch(e){}}
+  checkNear();
+}
+function checkNear(){
+  const R=nearR(); if(!R||!locOn()||!myPos) return;
+  const at=state.nearAt||(state.nearAt={}), inn=state.nearIn||(state.nearIn={}), now=Date.now();
+  let changed=false;
+  others().forEach(f=>{
+    const k=f.code; if(!k) return;
+    const l=locs[k];
+    if(!l||now-l.at>NEAR_FRESH||now-myPos.at>NEAR_FRESH){if(inn[k]){delete inn[k];changed=true}return}
+    const d=distM(myPos,l);
+    if(d<=R){
+      if(!inn[k]){inn[k]=1;changed=true;if(now-(at[k]||0)>NEAR_COOLDOWN){at[k]=now;alertNear(f,d)}}
+    }else if(d>R*1.5&&inn[k]){delete inn[k];changed=true}   // has to really leave before it can ring again
+  });
+  Object.keys(at).forEach(k=>{if(now-at[k]>864e5){delete at[k];changed=true}});
+  if(changed) localSave();
+}
+async function alertNear(f,d){
+  const body=`${josa(dn(f),'이','가')} 근처에 있어요 · ${d<50?'바로 옆':'약 '+fmtDist(d)}`;
+  toast('👋 '+body);
+  try{navigator.vibrate&&navigator.vibrate([90,60,90])}catch(e){}
+  try{
+    if('Notification' in window&&Notification.permission==='granted'&&'serviceWorker' in navigator){
+      const reg=await navigator.serviceWorker.ready;
+      await reg.showNotification('👋 근처에 친구가 있어요',{body,icon:'icon-192.png',badge:'icon-192.png',tag:'near-'+f.code,renotify:true,data:{url:'./'}});
+    }
+  }catch(e){}
+}
+setInterval(checkNear,60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){startGeo();sendLoc(false)}else stopGeo()});
 setInterval(()=>{if(locOn()&&document.visibilityState==='visible')sendLoc(false)},60000);
 
@@ -2237,6 +2350,8 @@ view.addEventListener('click',async e=>{
   if(d.act==='locOn'){setLocOn(true);return}
   if(d.act==='locOff'){setLocOn(false);return}
   if(d.act==='mapFit'){fitMap();return}
+  if(d.act==='mapOpen'){openMapFull();return}
+  if(d.near!==undefined){setNear(+d.near);return}
   if(d.locf){focusPin(d.locf);return}
   if(d.act==='pushOnBtn'){enablePush();return}
   if(d.act==='pushOff'){disablePush();return}
