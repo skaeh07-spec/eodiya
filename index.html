@@ -510,7 +510,7 @@ body.scrolled::before{opacity:0}
 .locsw span{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}
 .locsw.on{background:var(--free)}
 .locsw.on span{transform:translateX(20px)}
-.lpin{background:none;border:none}
+.lpin{position:relative;width:40px;height:46px;cursor:pointer}
 .lpin-b{width:40px;height:40px;border-radius:50%;padding:2px;background:var(--fc);box-shadow:0 3px 10px rgba(0,0,0,.3);position:relative}
 .lpin-b::after{content:"";position:absolute;left:50%;bottom:-5px;width:12px;height:12px;background:var(--fc);transform:translateX(-50%) rotate(45deg);z-index:-1}
 .lpin-b .avatar{width:36px;height:36px;font-size:15px;font-weight:700;border:2px solid #fff}
@@ -518,12 +518,13 @@ body.scrolled::before{opacity:0}
 .lpin.old{opacity:.5}
 .locbtn{border:none;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 8px;font-size:12px;margin-left:6px;font-weight:600;vertical-align:1px}
 .locbtn.old{color:var(--muted)}
-.mapbox.leaflet-container{font:inherit;background:var(--soft)}
-#mfMap .leaflet-bottom.leaflet-right{bottom:auto;top:0}
-.mapbox.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.85) saturate(.6)}
-.mapbox .leaflet-popup-content-wrapper,.mapbox .leaflet-popup-tip{background:var(--panel);color:var(--ink)}
-.mapbox .leaflet-popup-content{margin:10px 14px;font-size:13.5px;line-height:1.4}
-.mapbox.leaflet-container .leaflet-control-attribution{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
+.mapbox.maplibregl-map{font:inherit}
+.mapbox .maplibregl-popup-content{background:var(--panel);color:var(--ink);border-radius:14px;padding:9px 14px;font-size:13.5px;line-height:1.4;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.mapbox .maplibregl-popup-anchor-bottom .maplibregl-popup-tip{border-top-color:var(--panel)}
+.mapbox .maplibregl-popup-anchor-top .maplibregl-popup-tip{border-bottom-color:var(--panel)}
+.mapbox .maplibregl-ctrl-attrib{font-size:10px;background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--muted)}
+.mapbox .maplibregl-ctrl-attrib a{color:var(--muted)}
+.mapbox .maplibregl-ctrl-attrib-button{background-color:var(--panel)}
 </style>
 </head>
 <body>
@@ -549,7 +550,7 @@ body.scrolled::before{opacity:0}
 </div>
 
 <script>
-const APP_VER='1008-3';
+const APP_VER='1008-4';
 const PUSH_URL='https://eodiya-push.dgdogeon06.workers.dev'; // Cloudflare Worker 주소 (예: https://eodiya-push.이름.workers.dev)
 const TAB_TITLES={now:'지금 어디?',grid:'시간표',free:'같이 비는 시간',manage:'친구',me:'내 시간표'};
 const DAYS=['월','화','수','목','금','토','일'];
@@ -1884,7 +1885,7 @@ function saveStatus(sh){
   me.status={e,t,u};save();flushPublish();render();toast(`${e} ${t}`);notifyFriends(t);return true;
 }
 
-/* ---------- live location map (Leaflet + OpenStreetMap / CARTO tiles, no API key) ----------
+/* ---------- live location map (MapLibre + OpenFreeMap vector tiles, no API key) ----------
    Firestore: locs/{my code} = {owner, lat, lng, acc, t, at}. Written only while
    "위치 공유" is on and the app is open; deleted when it is turned off.
    Rule needed in Firebase (Firestore → 규칙):
@@ -1893,11 +1894,12 @@ function saveStatus(sh){
        allow write: if request.auth != null
          && get(/databases/$(database)/documents/people/$(code)).data.owner == request.auth.uid;
      }  */
-const LOC_MAX_AGE=3*3600e3, LOC_FRESH=15*60e3, LEAFLET='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/';
+const LOC_MAX_AGE=3*3600e3, LOC_FRESH=15*60e3, MAPLIB='https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/';
+const MAP_STYLE={light:'https://tiles.openfreemap.org/styles/positron',dark:'https://tiles.openfreemap.org/styles/dark'};
 const locs={}, locSubs={};          // friend code -> {lat,lng,acc,at}
 let myPos=null, geoWatch=null, locLastSent=0, locOkAt=0, locLastPos=null, locSending=false, locErr='', locRT=null;
 let locReclaimed=false;
-let LMap=null, mapEl=null, mapMarkers={}, mapFitted=false, leafletP=null, tileLayer=null;
+let LMap=null, mapEl=null, mapMarkers={}, mapLibP=null, mapDark=null;
 const locOn=()=>!!state.locOn;
 const locTime=d=>d.at&&d.at.toMillis?d.at.toMillis():(+d.t||0);
 const freshLoc=f=>{const l=f&&f.code&&locs[f.code];return l&&Date.now()-l.at<LOC_MAX_AGE?l:null};
@@ -1984,41 +1986,37 @@ function mapCardHTML(){
     ${on?nearRowHTML():''}
     ${on||pins?`<div class="mapwrap"><div id="mapSlot" class="mapbox"></div><button class="mapopen" data-act="mapOpen" aria-label="지도 크게 보기"><span>⤢ 크게 보기</span></button></div>`:''}</div>`;
 }
-function loadLeaflet(){
-  if(window.L&&L.map) return Promise.resolve();
-  if(!leafletP){
-    if(!document.getElementById('leafletCss')){const c=document.createElement('link');c.id='leafletCss';c.rel='stylesheet';c.href=LEAFLET+'leaflet.css';document.head.appendChild(c)}
-    leafletP=loadScript(LEAFLET+'leaflet.js').catch(e=>{leafletP=null;throw e});
+function loadMapLib(){
+  if(window.maplibregl&&maplibregl.Map) return Promise.resolve();
+  if(!mapLibP){
+    if(!document.getElementById('mapCss')){const c=document.createElement('link');c.id='mapCss';c.rel='stylesheet';c.href=MAPLIB+'maplibre-gl.css';document.head.appendChild(c)}
+    mapLibP=loadScript(MAPLIB+'maplibre-gl.js').catch(e=>{mapLibP=null;throw e});
   }
-  return leafletP;
+  return mapLibP;
 }
 const isDark=()=>{const t=document.documentElement.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches};
 function setTiles(){
   if(!LMap) return; const dark=isDark();
-  if(tileLayer&&tileLayer._dark===dark) return;
-  if(tileLayer) LMap.removeLayer(tileLayer);
-  tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
-  tileLayer._dark=dark;tileLayer.addTo(LMap);mapEl.classList.toggle('dark',dark);
+  if(mapDark===dark) return;
+  mapDark=dark;LMap.setStyle(dark?MAP_STYLE.dark:MAP_STYLE.light);   // HTML markers survive a style change
 }
 function mountMap(){
   if(mapFull||!document.getElementById('mapSlot')) return;
-  loadLeaflet().then(()=>{
+  loadMapLib().then(()=>{
     const slot=document.getElementById('mapSlot'); if(!slot) return;
     if(!mapEl){
       mapEl=document.createElement('div');mapEl.className='mapbox';slot.replaceWith(mapEl);
-      LMap=L.map(mapEl,{zoomControl:false,zoomSnap:.25,zoomDelta:.5,wheelPxPerZoomLevel:100,bounceAtZoomLimits:false,
-        tapTolerance:20,inertiaDeceleration:2400,inertiaMaxSpeed:1800,maxBoundsViscosity:1}).setView([43.4723,-80.5449],15);
-      LMap.attributionControl.setPrefix(false);setTiles();
+      mapDark=isDark();
+      LMap=new maplibregl.Map({container:mapEl,style:mapDark?MAP_STYLE.dark:MAP_STYLE.light,center:[-80.5449,43.4723],zoom:14.5,
+        attributionControl:false,dragRotate:false,pitchWithRotate:false,touchPitch:false,maxPitch:0,fadeDuration:150});
+      LMap.touchZoomRotate.disableRotation();
+      LMap.addControl(new maplibregl.AttributionControl({compact:true}),'top-right');
       matchMedia('(prefers-color-scheme: dark)').addEventListener('change',setTiles);
     }else slot.replaceWith(mapEl);
-    applyMapMode();LMap.invalidateSize();updateMap();fitMap(false);
-  }).catch(()=>{const s=document.getElementById('mapSlot');if(s)s.innerHTML='<p class="sub" style="padding:16px;margin:0">지도를 불러오지 못했어요.</p>'});
+    applyMapMode();LMap.resize();updateMap();fitMap(false);
+  }).catch(e=>{console.warn('map',e);const s=document.getElementById('mapSlot');if(s)s.innerHTML='<p class="sub" style="padding:16px;margin:0">지도를 불러오지 못했어요.</p>'});
 }
-function pinIcon(f,old){
-  return L.divIcon({className:'lpin'+(old?' old':''),iconSize:[40,40],iconAnchor:[20,46],popupAnchor:[0,-44],
-    html:`<div class="lpin-b" style="--fc:${f.color}">${avatarHTML(f,'avatar')}</div><span class="lpin-n">${esc(label(f))}</span>`});
-}
+function pinHTML(f){return `<div class="lpin-b" style="--fc:${f.color}">${avatarHTML(f,'avatar')}</div><span class="lpin-n">${esc(label(f))}</span>`}
 function updateMap(){
   if(!LMap) return;
   setTiles();
@@ -2029,36 +2027,43 @@ function updateMap(){
   const seen=new Set();
   items.forEach(({k,f,l,mine})=>{
     seen.add(k);
-    const old=!mine&&Date.now()-l.at>LOC_FRESH, sig=[f.color,phash(okPhoto(f.photo)),label(f),old].join('|');
+    const old=!mine&&Date.now()-l.at>LOC_FRESH, sig=[f.color,phash(okPhoto(f.photo)),label(f)].join('|');
     let m=mapMarkers[k];
-    if(!m) m=mapMarkers[k]={sig,mk:L.marker([l.lat,l.lng],{icon:pinIcon(f,old),zIndexOffset:mine?1000:0}).addTo(LMap),
-      circle:L.circle([l.lat,l.lng],{radius:0,color:f.color,weight:1,opacity:.45,fillOpacity:.1,interactive:false}).addTo(LMap)};
-    else{m.mk.setLatLng([l.lat,l.lng]);m.circle.setLatLng([l.lat,l.lng]);if(m.sig!==sig){m.mk.setIcon(pinIcon(f,old));m.sig=sig}}
-    m.circle.setRadius(l.acc&&l.acc<500?l.acc:0);m.circle.setStyle({color:f.color});
-    const html=`<b>${esc(label(f))}</b><br><span class="sub">${mine?'내 위치':ago(l.at)}${l.acc?` · 오차 ±${l.acc}m`:''}</span>`;
-    if(m.mk.getPopup())m.mk.setPopupContent(html);else m.mk.bindPopup(html,{closeButton:false});
+    if(!m){
+      const el=document.createElement('div');el.className='lpin';el.innerHTML=pinHTML(f);if(mine)el.style.zIndex=2;
+      const pop=new maplibregl.Popup({offset:48,closeButton:false,maxWidth:'240px'});
+      m=mapMarkers[k]={sig,el,mk:new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([l.lng,l.lat]).setPopup(pop).addTo(LMap)};
+    }else{m.mk.setLngLat([l.lng,l.lat]);if(m.sig!==sig){m.el.innerHTML=pinHTML(f);m.sig=sig}}
+    m.el.classList.toggle('old',old);
+    m.mk.getPopup().setHTML(`<b>${esc(label(f))}</b><br><span class="sub">${mine?'내 위치':ago(l.at)}${l.acc?` · 오차 ±${l.acc}m`:''}</span>`);
   });
-  Object.keys(mapMarkers).forEach(k=>{if(!seen.has(k)){LMap.removeLayer(mapMarkers[k].mk);LMap.removeLayer(mapMarkers[k].circle);delete mapMarkers[k]}});
+  Object.keys(mapMarkers).forEach(k=>{if(!seen.has(k)){mapMarkers[k].mk.remove();delete mapMarkers[k]}});
   if(mapFull) peopleBar(items);
   else if(items.length) fitMap(false);   // the small card always shows everyone
 }
 function fitMap(animate=true){
-  if(!LMap) return; const ll=Object.values(mapMarkers).map(m=>m.mk.getLatLng());
+  if(!LMap) return; const ll=Object.values(mapMarkers).map(m=>m.mk.getLngLat());
   if(!ll.length) return;
-  if(ll.length===1) LMap.setView(ll[0],16,{animate}); else LMap.fitBounds(L.latLngBounds(ll),{padding:mapFull?[70,70]:[40,40],maxZoom:17,animate});
+  const dur=animate?500:0;
+  if(ll.length===1){LMap.easeTo({center:ll[0],zoom:16,duration:dur});return}
+  const b=new maplibregl.LngLatBounds(ll[0],ll[0]);ll.forEach(x=>b.extend(x));
+  const pad=mapFull?{top:70,bottom:130,left:60,right:80}:50;
+  LMap.fitBounds(b,{padding:pad,maxZoom:17,duration:dur});
 }
+function closePins(){Object.values(mapMarkers).forEach(m=>{const p=m.mk.getPopup();if(p&&p.isOpen())p.remove()})}
+function goPin(m){closePins();LMap.flyTo({center:m.mk.getLngLat(),zoom:17,duration:600});setTimeout(()=>{if(!m.mk.getPopup().isOpen())m.mk.togglePopup()},620)}
 function focusPin(code){
   if(!LMap) return;
   if(!mapFull) openMapFull();
-  const m=mapMarkers[code]; if(!m) return;
-  setTimeout(()=>{LMap.flyTo(m.mk.getLatLng(),17,{duration:.5});setTimeout(()=>m.mk.openPopup(),550)},mapFull?60:0);
+  const m=mapMarkers[code]; if(m) setTimeout(()=>goPin(m),80);
 }
 
 /* card = still preview (tap to open), full screen = free pan/zoom */
 let mapFull=false, mfEl=null, ignorePop=false;
 function applyMapMode(){
   if(!LMap) return;
-  [LMap.dragging,LMap.touchZoom,LMap.doubleClickZoom,LMap.scrollWheelZoom,LMap.boxZoom,LMap.keyboard].forEach(h=>h&&(mapFull?h.enable():h.disable()));
+  [LMap.dragPan,LMap.scrollZoom,LMap.boxZoom,LMap.doubleClickZoom,LMap.touchZoomRotate,LMap.keyboard].forEach(h=>h&&(mapFull?h.enable():h.disable()));
+  if(mapFull) LMap.touchZoomRotate.disableRotation();
 }
 const MF_ICON={
   me:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>',
@@ -2074,19 +2079,19 @@ function openMapFull(){
       const b=e.target.closest('[data-mf],[data-mfp]'); if(!b) return;
       if(b.dataset.mf==='close') closeMapFull(false);
       else if(b.dataset.mf==='fit') fitMap(true);
-      else if(b.dataset.mf==='me'){if(myPos)LMap.flyTo([myPos.lat,myPos.lng],17,{duration:.5});else toast('위치 공유를 켜면 내 위치가 보여요')}
-      else if(b.dataset.mfp){const m=mapMarkers[b.dataset.mfp];if(m){LMap.flyTo(m.mk.getLatLng(),17,{duration:.5});setTimeout(()=>m.mk.openPopup(),550)}}
+      else if(b.dataset.mf==='me'){if(myPos&&mapMarkers.__me)goPin(mapMarkers.__me);else toast('위치 공유를 켜면 내 위치가 보여요')}
+      else if(b.dataset.mfp){const m=mapMarkers[b.dataset.mfp];if(m)goPin(m)}
     });
   }
   mapFull=true;mfEl.hidden=false;document.body.style.overflow='hidden';
   mfEl.querySelector('#mfMap').prepend(mapEl);
   const sub=document.querySelector('.mapcard .maphead .sub');mfEl.querySelector('#mfSub').textContent=sub?sub.textContent:'';
-  applyMapMode();LMap.invalidateSize();updateMap();fitMap(false);
+  applyMapMode();LMap.resize();updateMap();fitMap(false);
   try{history.pushState({mapFull:1},'')}catch(e){}
 }
 function closeMapFull(fromPop){
   if(!mapFull) return;
-  mapFull=false;mfEl.hidden=true;document.body.style.overflow='';LMap.closePopup();
+  mapFull=false;mfEl.hidden=true;document.body.style.overflow='';closePins();
   applyMapMode();render();
   if(!fromPop&&history.state&&history.state.mapFull){ignorePop=true;history.back()}
 }
